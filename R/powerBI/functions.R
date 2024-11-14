@@ -37,12 +37,285 @@
 
 #### GOOGLE ANALYTICS ####
 
+#trying again take 2
+
+# library(rvest)
+# library(dplyr)
+# library(rvest)
+# library(dplyr)
+# 
+# # Function to check the status of a URL
+# check_url_status <- function(url) {
+#   tryCatch({
+#     status <- httr::status_code(httr::HEAD(url))
+#     return(status)
+#   }, error = function(e) {
+#     return(NA) # Return NA if there's an error
+#   })
+# }
+# 
+# # Function to crawl a website and get all internal URLs recursively
+# crawl_website <- function(base_url, visited_urls = c()) {
+#   
+#   # Don't process URLs we've already visited or from other domains
+#   if (base_url %in% visited_urls || !grepl("^https://rmi.org", base_url)) {
+#     return(visited_urls)
+#   }
+#   
+#   # Check if URL returns a 200 status code
+#   status_code <- check_url_status(base_url)
+#   if (is.na(status_code) || status_code != 200) {
+#     message(paste("Skipping URL due to non-200 status:", base_url))
+#     return(visited_urls)
+#   }
+#   
+#   # Add URL to visited list
+#   visited_urls <- c(visited_urls, base_url)
+#   
+#   # Attempt to read the page
+#   tryCatch({
+#     page <- read_html(base_url)
+#     
+#     # Extract all links from the page
+#     urls <- page %>%
+#       html_nodes("a") %>%
+#       html_attr("href")
+#     
+#     # Filter internal URLs only
+#     internal_urls <- urls[grepl("^/|^https://rmi.org", urls)]
+#     internal_urls <- unique(gsub("#.*", "", internal_urls))  # Remove fragment identifiers
+#     
+#     # Convert relative URLs to absolute URLs
+#     full_urls <- ifelse(grepl("^/", internal_urls), paste0("https://rmi.org", internal_urls), internal_urls)
+#     
+#     # Recursively visit each new internal URL
+#     for (url in full_urls) {
+#       if (!url %in% visited_urls) {
+#         visited_urls <- crawl_website(url, visited_urls)
+#       }
+#     }
+#     
+#   }, error = function(e) {
+#     message(paste("Error crawling:", base_url, e))
+#   })
+#   
+#   return(visited_urls)
+# }
+# 
+# # Start crawling from the homepage
+# start_url <- "https://rmi.org"
+# all_urls <- crawl_website(start_url)
+# 
+# # Print the number of unique URLs found
+# print(paste("Number of unique URLs found:", length(all_urls)))
+# 
+# # View all extracted URLs
+# print(all_urls)
+# 
+# 
+# 
+# ####
+# 
+# scrape_campaigntag <- function(url, campaign_tags) {
+#   if (!grepl("^http", url)) {
+#     url <- paste0("https://rmi.org", url)
+#   }
+#   
+#   tryCatch({
+#     page <- read_html(url) 
+#     
+#     #extract metadata text from this specific script tag
+#     json_scripts <- page %>%
+#       html_nodes('script[type="application/ld+json"]') %>%
+#       html_text() 
+#     
+#     #initialize campaign tag var  
+#     #campaign_tags <- c("cop28", "2023-2025_coalvgas", "oci+") # add to or change
+#     campaign_tag <- NULL #initializing
+#     
+#     #loops through each element, parsing json string
+#     for (i in json_scripts) {
+#       json_content <- fromJSON(i)
+#       
+#      # print("Extracted JSON content:") #testing
+#      # print(json_content)
+#       
+#       # checks if has keyword field and is of type character; lowercase to avoid case sensitivity 
+#       if ("keywords" %in% names(json_content) && is.character(json_content$keywords)) {
+#         lowercase_keywords <- tolower(json_content$keywords)
+#         
+#         # if tag is found, assign it to campaign tag variable and return value
+#         for (tag in campaign_tags) {
+#           if (tag %in% lowercase_keywords){
+#             campaign_tag <- tag
+#             print(paste("Campaign tag found:", campaign_tag)) #testing
+#             break
+#           }
+#         }
+#       }
+#       if(!is.null(campaign_tag)) 
+#         break
+#     }
+#     return(campaign_tag)
+#   }, error = function(e) {
+#     message(paste("Error in scraping URL:", url, e))
+#     return(NULL)
+#   })
+# }
+# 
+# find_urls_with_campaign_tags <- function(df, campaign_tags) {
+#   base_domain <- "https://rmi.org"
+#   
+#   filtered_urls <- data.frame(pagePath = character(), campaign_tag = character(), stringsAsFactors = FALSE)
+#   
+#   for(i in 1:nrow(df)){
+#     full_url <- paste0(base_domain, df$pagePath[i])
+#     campaign_tag <- scrape_campaigntag(full_url, campaign_tags)
+#     
+#     if (!is.null(campaign_tag)) {
+#       filtered_urls <- rbind(filtered_urls, data.frame(pagePath = full_url, campaign_tag = campaign_tag, stringsAsFactors = FALSE))
+#     
+#     }
+#   }
+#   
+#   return(filtered_urls)
+# }
+# 
+# url_data <- data.frame(pagePath = c("/insight/kyog/", "/theres-no-one-size-fits-all-for-achieving-universal-energy-access-in-africa/",
+#                                     "/rmi-at-cop28/", "/reality-check-natural-gas-true-climate-risk/"))
+# 
+# campaign_tags <- c("cop28", "2023-2025_coalvgas", "oci+")
+# 
+# filtered_urls <- find_urls_with_campaign_tags(url_data, campaign_tags)
+# print(filtered_urls)
+# 
+# 
+# # MODIFYING NEW FUNCTIONS take 1
+# campaign_tags <- c("cop28", "2023-2025_coalvgas", "oci+")
+# 
+# scrape_campaigntag <- function(url, campaign_tags) {
+#   if (!grepl("^http", url)) {
+#     url <- paste0("https://rmi.org", url)
+#   }
+#   
+#   tryCatch({
+#     page <- read_html(url) 
+#     
+#     #extract metadata text from this specific script tag
+#     json_scripts <- page %>%
+#       html_nodes('script[type="application/ld+json"]') %>%
+#       html_text() 
+#     
+#     #initialize campaign tag var  
+#     #campaign_tags <- c("cop28", "2023-2025_coalvgas", "oci+") # add to or change
+#     campaign_tag <- NULL #initializing
+#     
+#     #loops through each element, parsing json string
+#     for (i in json_scripts) {
+#       json_content <- fromJSON(i)
+#       
+#       # checks if has keyword field and is of type character; lowercase to avoid case sensitivity 
+#       if ("keywords" %in% names(json_content) && is.character(json_content$keywords)) {
+#         lowercase_keywords <- tolower(json_content$keywords)
+#         
+#         # if tag is found, assign it to campaign tag variable and return value
+#         for (tag in campaign_tags) {
+#           if (tag %in% lowercase_keywords){
+#             campaign_tag <- tag
+#             print(paste("Campaign tag found:", campaign_tag)) #testing
+#             break
+#           }
+#         }
+#       }
+#       if(!is.null(campaign_tag)) 
+#         break
+#     }
+#     return(campaign_tag)
+#   }, error = function(e) {
+#     message(paste("Error in scraping URL:", url, e))
+#     return(NULL)
+#   })
+# }
+# 
+# url1 <- "https://rmi.org/insight/kyog/" 
+# url2 <- "https://rmi.org/theres-no-one-size-fits-all-for-achieving-universal-energy-access-in-africa/"
+# url3 <- "https://rmi.org/rmi-at-cop28/"
+# url4 <- "https://rmi.org/reality-check-natural-gas-true-climate-risk/"
+# campaign_tag <- scrape_campaigntag(url4)
+# print(campaign_tag)
+# 
+# test_url <- "https://rmi.org/people/nicole-leonard/" # A URL path from GA4
+# 
+# # Call the scraping function and print the result
+# campaign_tag <- scrape_campaigntag(test_url)
+# print(paste("Campaign tag found:", campaign_tag)) # testing to see whether this url will work
+# 
+# # other function
+# get_filtered_URLs <- function(propertyID, campaign_tags) {
+#   all_data <- ga_data(
+#     propertyID,
+#     date_range = dateRangeGA,
+#     dimensions = c("pagePath"),
+#     metrics = c('screenPageViews', "totalUsers", "userEngagementDuration"),
+#     limit = -1
+#   )
+#   
+#   #convert to a dataframe
+#   url_data <- as.data.frame(all_data)
+#   
+#   # initialize new df for filtered urls
+#   filtered_urls <- data.frame(pagePath = character(), campaign_tag = character(), stringsAsFactors = FALSE)
+#   
+#   base_domain <- "https://rmi.org" 
+#   
+#   for (url in url_data$pagePath) {
+#     full_url <- paste0(base_domain, url)
+#     #print(paste("Processing URL:",full_url))  # Print each URL being processed
+#     campaign_tag <- scrape_campaigntag(full_url, campaign_tags)
+#     
+#     if (!is.null(campaign_tag)){
+#       filtered_urls <- rbind(filtered_urls, data.frame(pagePath = full_url, campaign_tag = campaign_tag, stringsAsFactors = FALSE))
+#       
+#     }
+#   }
+#   
+#   filtered_metrics <- url_data %>%
+#     filter(paste0(base_domain, pagePath) %in% filtered_urls$pagePath)
+#   
+#   filtered_urls_metrics <- merge(filtered_urls, filtered_metrics, by.x = "pagePath", by.y = "pagePath", all.x = TRUE)
+#   
+#   
+#   return(filtered_urls_metrics)
+# }
+# 
+# #url_data <- as.data.frame(all_data)
+# #print(url_data$pagePath)
+# 
+# 
+# # Print the URLs
+# #print(url_data$pagePath)
+# 
+# #getWebsiteURLs(propertyID = rmiPropertyID, campaign_tags = campaign_tags)
+# rmiPropertyID <- 354053620
+# campaign_tags <- c("cop28", "2023-2025_coalvgas", "oci+")
+# 
+# result <- get_filtered_URLs(rmiPropertyID, campaign_tags)
+# print(result)
+# 
+# #return(filtered_urls)
+# 
+# 
+# 
+# 
+# 
+# 
+# # END MODIFYING NEW FUNCTIONS
 
 # NEW: Build function that uses campaign tag in webpage metadata to identify related URLs
 
 # function that scrapes to get campaign
 
-# Function to scrape CAMPAIGN TAG from a URL
+# OLD Function to scrape CAMPAIGN TAG from a URL
 scrape_campaigntag <- function(url) {
   if (!grepl("^http", url)) {
     url <- paste0("https://rmi.org", url)
@@ -57,7 +330,7 @@ scrape_campaigntag <- function(url) {
     html_text() 
   
   #initialize campaign tag var  
-  campaign_tags <- c("cop28", "2023-2025_coalvgas", "oci+") # add to or change
+  campaign_tags <- c("cop28", "2023-2025_coalvgas", "oci+", "nycw24", "transition-narrative") # add to or change
   campaign_tag <- NULL #initializing
 
   #loops through each element, parsing json string
@@ -94,14 +367,15 @@ url1 <- "https://rmi.org/insight/kyog/"
 url2 <- "https://rmi.org/theres-no-one-size-fits-all-for-achieving-universal-energy-access-in-africa/"
 url3 <- "https://rmi.org/rmi-at-cop28/"
 url4 <- "https://rmi.org/reality-check-natural-gas-true-climate-risk/"
-campaign_tag <- scrape_campaigntag(url4)
+url5 <- "https://rmi.org/event/its-time-to-re-energize-rmi-at-climate-week-nyc/"
+campaign_tag <- scrape_campaigntag(url5)
 print(campaign_tag)
 
-test_url <- "https://rmi.org/people/nicole-leonard/" # A URL path from GA4
+#test_url <- "https://rmi.org/people/nicole-leonard/" # A URL path from GA4
 
 # Call the scraping function and print the result
-campaign_tag <- scrape_campaigntag(test_url)
-print(paste("Campaign tag found:", campaign_tag)) # testing to see whether this url will work
+#campaign_tag <- scrape_campaigntag(test_url)
+#print(paste("Campaign tag found:", campaign_tag)) # testing to see whether this url will work
 
 # NEW: Function that gets all urls, scrapes each url, and then adds to dataframe
 # need to add campaign filter
@@ -151,11 +425,11 @@ getWebsiteURLs <- function(propertyID, campaign_tags) {
 
 #getWebsiteURLs(propertyID = rmiPropertyID, campaign_tags = campaign_tags)
 rmiPropertyID <- 354053620
-campaign_tags <- c("cop28", "2023-2025_coalvgas", "oci+")
+campaign_tags <- c("cop28", "2023-2025_coalvgas", "oci+", "nycw", "transition-narrative")
 
 # Call the function with the correct arguments
-filtered_urls <- getWebsiteURLs(propertyID = rmiPropertyID, campaign_tags = campaign_tags)
-view(filtered_urls)
+#filtered_urls <- getWebsiteURLs(propertyID = rmiPropertyID, campaign_tags = campaign_tags)
+#view(filtered_urls)
 
 #return(filtered_urls)
 
@@ -172,9 +446,9 @@ scrape_pagetitle <- function(url) {
     return(cleaned_title)
 }
 
-url3 <- "https://rmi.org/event/later-is-too-late/"
-cleaned_title <- scrape_pagetitle(url3)
-print(cleaned_title)
+#url3 <- "https://rmi.org/event/later-is-too-late/"
+#cleaned_title <- scrape_pagetitle(url3)
+#print(cleaned_title)
 
 # NEW: Function that scrapes the given urls for content type.
 scrape_pagetype <- function(url) {
@@ -193,30 +467,116 @@ scrape_pagetype <- function(url) {
   }
 }
 
-example1 <- "https://rmi.org/event/sustainable-aluminum-finance-framework-launch-at-cop28/"
-example2 <- "https://rmi.org/insight/the-rural-equitable-climate-transition-toward-carbon-neutrality-and-shared-prosperity/"
-example3 <- "https://rmi.org/organic-waste-an-untapped-solution-waste-authorities-in-nigeria-tackle-food-waste-as-a-climate-solution-in-lagos/"
-example4 <- "https://rmi.org/press-release/caribbean-countries-on-the-frontline-of-climate-change-get-lasting-support-to-unlock-critical-finance/"
-example5 <- "https://rmi.org/rmi-at-cop28/"
+# example1 <- "https://rmi.org/event/sustainable-aluminum-finance-framework-launch-at-cop28/"
+# example2 <- "https://rmi.org/insight/the-rural-equitable-climate-transition-toward-carbon-neutrality-and-shared-prosperity/"
+# example3 <- "https://rmi.org/organic-waste-an-untapped-solution-waste-authorities-in-nigeria-tackle-food-waste-as-a-climate-solution-in-lagos/"
+# example4 <- "https://rmi.org/press-release/caribbean-countries-on-the-frontline-of-climate-change-get-lasting-support-to-unlock-critical-finance/"
+# example5 <- "https://rmi.org/rmi-at-cop28/"
+# 
+# print(scrape_pagetype(example1))
+# print(scrape_pagetype(example2))
+# print(scrape_pagetype(example3))
+# print(scrape_pagetype(example4))
+# print(scrape_pagetype(example5))
 
-print(scrape_pagetype(example1))
-print(scrape_pagetype(example2))
-print(scrape_pagetype(example3))
-print(scrape_pagetype(example4))
-print(scrape_pagetype(example5))
+
+# new function to get report_id and event_id for future campaigns
+scrape_report_id <- function(df) {
+  
+  report_ids <- c()
+  
+  for (url in df$pagePath) {
+    tryCatch({
+      page <- read_html(url)
+      
+      json_scripts <- page %>%
+        html_nodes('script[type="application/ld+json"]') %>%
+        html_text()
+      
+      report_id <- NULL
+      
+      for (i in json_scripts) {
+        json_content <- fromJSON(i)
+        
+        print("Extracted JSON content:")
+        print(json_content)
+        
+        if ("report_id" %in% names(json_content)) {
+          report_id <- json_content$report_id
+          print(paste("Report ID found:", report_id)) # Testing
+          break
+        }
+      }
+      
+      report_ids <- c(report_ids, ifelse(is.null(report_id), NA, report_id))
+      
+    }, error = function(e) {
+      message(paste("Error scraping URL:", url))
+      report_ids <- c(report_ids, NA)
+    })
+  }
+  
+  df$report_id <- report_ids
+  
+  return(df)
+}
+
+
+
+scrape_event_id <- function(df) {
+  
+  event_ids <- c()
+  
+  for (url in df$pagePath) {
+    tryCatch({
+      page <- read_html(url)
+      
+      json_scripts <- page %>%
+        html_nodes('script[type="application/ld+json"]') %>%
+        html_text()
+      
+      event_id <- NULL
+      
+      for (i in json_scripts) {
+        json_content <- fromJSON(i)
+        
+        print("Extracted JSON content:")
+        print(json_content)
+        
+        if ("event_id" %in% names(json_content)) {
+          event_id <- json_content$event_id
+          print(paste("Event ID found:", event_id)) # Testing
+          break
+        }
+      }
+      
+      event_ids <- c(event_ids, ifelse(is.null(event_id), NA, event_id))
+      
+    }, error = function(e) {
+      message(paste("Error scraping URL:", url))
+      event_ids <- c(event_ids, NA)
+    })
+  }
+  
+  df$event_id <- event_ids
+  
+  return(df)
+}
+
+
 
 #this code should be added to dashboard eventually; not sure if it will keep updating, but it should? 
 #sapply makes it a vector
-campaign_urls <- filtered_urls %>%
-  mutate(pageTitle = sapply(pagePath, scrape_pagetitle)) %>%
-  mutate(pageType = sapply(pagePath, scrape_pagetype)) %>%
-  select(pageTitle, pageType, pagePath, campaign_tag) %>%
-  mutate(propertyID = 354053620) #can create if-else for coal vs gas
-  #mutate(reportID) %>%
-  #mutate(eventID)
+# campaign_urls <- filtered_urls %>%
+#   mutate(pageTitle = sapply(pagePath, scrape_pagetitle)) %>%
+#   mutate(pageType = sapply(pagePath, scrape_pagetype)) %>%
+#   select(pageTitle, pageType, pagePath, campaign_tag) %>%
+#   mutate(propertyID = 354053620) #can create if-else for coal vs gas
+#   #mutate(reportID) %>%
+#   #mutate(eventID)
+# 
 
-
-view(campaign_urls)
+# view(campaign_urls)
 
 # NEW: Function that populates new dataframe to replicate previous "campaignkey" xls
 #str(filtered_urls)  # might not need this.
@@ -332,16 +692,24 @@ getPageData <- function(df){
     #                          ifelse(grepl('report', tolower(metadata)), 'Report',
     #                                 ifelse(grepl('news release', tolower(metadata)), 'News Release',
     #                                        pageType)),
-      mutate(pageType = case_when(grepl('article', tolower(metadata)) ~ 'Article',
+      mutate(pageType = case_when(grepl('reality check', tolower(metadata)) ~ 'Reality Check', 
+                                  grepl('101', tolower(metadata)) ~ '101',  
+                                  grepl('article', tolower(metadata)) ~ 'Article',
                                   grepl('report', tolower(metadata)) ~ 'Report',
                                   grepl('news|press-release', tolower(pageURL)) ~ 'News Release',  # Updated to catch all
                                   grepl('event', tolower(pageURL)) ~ 'Event',
+                                #  grepl('101|reality check', tolower(metadata)) ~ 'Article',  # Added condition for '101' or 'Reality Check'
+                                  grepl('technology ecosystem', pageTitle) ~ 'Article',  # Added condition for "Toward a Technology Ecosystem for Carbon Accounting"
                                   grepl('hub|rmi', tolower(pageURL)) ~ 'Hub',
                                   TRUE ~ pageType),
-            icon = case_when(grepl('article', tolower(metadata)) ~ 4,
+            icon = case_when(grepl('reality check', tolower(metadata)) ~ 8,
+                             grepl('101', tolower(metadata)) ~ 7,
+                             grepl('article', tolower(metadata)) ~ 4,
                              grepl('report', tolower(metadata)) ~ 1,
                              grepl('news|press-release', tolower(pageURL)) ~ 2,  
                              grepl('event', tolower(pageURL)) ~ 3,
+                            # grepl('101|reality check', tolower(metadata)) ~ 4,  # Added condition for '101' or 'Reality Check'
+                             grepl('technology ecosystem', pageTitle) ~ 4, 
                              grepl('hub|rmi', tolower(pageURL)) ~ 6,
                              TRUE ~ 5)) %>%
               
@@ -352,83 +720,83 @@ getPageData <- function(df){
 }
 
 #AMENDING THIS FUNCTION TO INCLUDE CAMPAIGN TAG
-
-getPageData <- function(df){
-  
-  for(i in 1:nrow(df)){
-    
-    url <- as.character(df[i, 'pageURL'])
-    
-    #' get page titles
-    tryCatch( { 
-      url_tb <- url %>%
-        read_html() %>% 
-        html_nodes('head > title') %>% 
-        html_text() %>% 
-        as.data.frame() %>% 
-        rename(title = 1) 
-      
-      df[i, 'pageTitle'] <- url_tb[1, 'title']
-      
-    }, error = function(e){
-      df[i, 'pageTitle'] <- NA
-    })
-    
-    #' get content type from page metadata
-    if(df[i, 'site'] == 'rmi.org'){
-      tryCatch( { 
-        url_tb <- url %>%
-          read_html() %>% 
-          html_nodes('script') %>% 
-          html_text() %>% 
-          as.data.frame() %>%
-          rename(node = 1) %>% 
-          filter(grepl('schema.org', node)) %>% 
-          mutate(program = str_extract(node, 'articleSection\\":\\"([^"]+)\\"'),
-                 program = gsub('articleSection":"',"",program),
-                 program = gsub('"', "", program)) %>%
-          mutate(keywords = sub('.*keywords\\"\\:\\[', "", node),
-                 keywords = gsub('\\].*', "", keywords))
-        
-        df[i, 'metadata'] <- url_tb[2, 'keywords']
-        df[i, 'program'] <- url_tb[2, 'program']
-        
-      }, error = function(e){
-        df[i, 'metadata'] <- NA
-      })
-    } else {
-      #' categorize as 'New Website' if no metadata is detected
-      df[i, 'metadata'] <- NA
-      df[i, 'pageType'] <- 'New Website'
-    }
-    
-  }
-  
-  #' categorize as 'Article' or 'Report' if these terms are detected in the metadata
-  df <- df %>% 
-    # mutate(pageType = ifelse(grepl('article', tolower(metadata)), 'Article',
-    #                          ifelse(grepl('report', tolower(metadata)), 'Report',
-    #                                 ifelse(grepl('news release', tolower(metadata)), 'News Release',
-    #                                        pageType)),
-    mutate(pageType = case_when(grepl('article', tolower(metadata)) ~ 'Article',
-                                grepl('report', tolower(metadata)) ~ 'Report',
-                                grepl('news', tolower(metadata)) ~ 'News Release',
-                                grepl('event', tolower(pageURL)) ~ 'Event',
-                                grepl('hub', tolower(pageURL)) ~ 'Hub',
-                                TRUE ~ pageType),
-           icon = case_when(grepl('article', tolower(metadata)) ~ 4,
-                            grepl('report', tolower(metadata)) ~ 1,
-                            grepl('news', tolower(metadata)) ~ 2,
-                            grepl('event', tolower(pageURL)) ~ 3,
-                            grepl('hub', tolower(pageURL)) ~ 6,
-                            TRUE ~ 5)) %>%
-    
-    # ifelse(grepl('article', tolower(metadata)), 4,
-    #            ifelse(grepl('report', tolower(metadata)), 1, 5))) %>% 
-    distinct(pageTitle, .keep_all = TRUE)
-  
-}
-# End of new function.
+#' 
+#' getPageData <- function(df){
+#'   
+#'   for(i in 1:nrow(df)){
+#'     
+#'     url <- as.character(df[i, 'pageURL'])
+#'     
+#'     #' get page titles
+#'     tryCatch( { 
+#'       url_tb <- url %>%
+#'         read_html() %>% 
+#'         html_nodes('head > title') %>% 
+#'         html_text() %>% 
+#'         as.data.frame() %>% 
+#'         rename(title = 1) 
+#'       
+#'       df[i, 'pageTitle'] <- url_tb[1, 'title']
+#'       
+#'     }, error = function(e){
+#'       df[i, 'pageTitle'] <- NA
+#'     })
+#'     
+#'     #' get content type from page metadata
+#'     if(df[i, 'site'] == 'rmi.org'){
+#'       tryCatch( { 
+#'         url_tb <- url %>%
+#'           read_html() %>% 
+#'           html_nodes('script') %>% 
+#'           html_text() %>% 
+#'           as.data.frame() %>%
+#'           rename(node = 1) %>% 
+#'           filter(grepl('schema.org', node)) %>% 
+#'           mutate(program = str_extract(node, 'articleSection\\":\\"([^"]+)\\"'),
+#'                  program = gsub('articleSection":"',"",program),
+#'                  program = gsub('"', "", program)) %>%
+#'           mutate(keywords = sub('.*keywords\\"\\:\\[', "", node),
+#'                  keywords = gsub('\\].*', "", keywords))
+#'         
+#'         df[i, 'metadata'] <- url_tb[2, 'keywords']
+#'         df[i, 'program'] <- url_tb[2, 'program']
+#'         
+#'       }, error = function(e){
+#'         df[i, 'metadata'] <- NA
+#'       })
+#'     } else {
+#'       #' categorize as 'New Website' if no metadata is detected
+#'       df[i, 'metadata'] <- NA
+#'       df[i, 'pageType'] <- 'New Website'
+#'     }
+#'     
+#'   }
+#'   
+#'   #' categorize as 'Article' or 'Report' if these terms are detected in the metadata
+#'   df <- df %>% 
+#'     # mutate(pageType = ifelse(grepl('article', tolower(metadata)), 'Article',
+#'     #                          ifelse(grepl('report', tolower(metadata)), 'Report',
+#'     #                                 ifelse(grepl('news release', tolower(metadata)), 'News Release',
+#'     #                                        pageType)),
+#'     mutate(pageType = case_when(grepl('article', tolower(metadata)) ~ 'Article',
+#'                                 grepl('report', tolower(metadata)) ~ 'Report',
+#'                                 grepl('news', tolower(metadata)) ~ 'News Release',
+#'                                 grepl('event', tolower(pageURL)) ~ 'Event',
+#'                                 grepl('hub', tolower(pageURL)) ~ 'Hub',
+#'                                 TRUE ~ pageType),
+#'            icon = case_when(grepl('article', tolower(metadata)) ~ 4,
+#'                             grepl('report', tolower(metadata)) ~ 1,
+#'                             grepl('news', tolower(metadata)) ~ 2,
+#'                             grepl('event', tolower(pageURL)) ~ 3,
+#'                             grepl('hub', tolower(pageURL)) ~ 6,
+#'                             TRUE ~ 5)) %>%
+#'     
+#'     # ifelse(grepl('article', tolower(metadata)), 4,
+#'     #            ifelse(grepl('report', tolower(metadata)), 1, 5))) %>% 
+#'     distinct(pageTitle, .keep_all = TRUE)
+#'   
+#' }
+#' # End of new function.
 
 #' get web traffic metrics for all pages
 getPageMetrics <- function(propertyID, pages){
@@ -479,7 +847,9 @@ correctTraffic <- function(df, type){
 }
 
 #' get page traffic (#' sessions) driven by social media channels
-getTrafficSocial <- function(propertyID, pages, site = 'rmi.org'){
+#' #add campaignID as an argument being passed in
+getTrafficSocial <- function(propertyID, pages, campaignID, site = 'rmi.org'){
+  print(paste("Inside getTrafficSocial with campaignID:", campaignID))  # Debugging
   
   aquisitionSocial <- ga_data(
     propertyID,
@@ -498,9 +868,83 @@ getTrafficSocial <- function(propertyID, pages, site = 'rmi.org'){
                      PageViews = sum(screenPageViews)) %>% 
     mutate(site = site,
            dashboardCampaign = campaignID)
+  # was campaignID
   
   return(aquisitionSocial)
 }
+
+# New and improved.
+getTrafficSocial2 <- function(propertyID, pages, campaignPages, site = 'rmi.org'){
+  print(paste("Inside getTrafficSocial with campaignID:", campaignID))  # Debugging
+  
+  aquisitionSocial <- ga_data(
+    propertyID,
+    metrics = c("sessions", "screenPageViews"),
+    dimensions = c("pageTitle", "sessionSource", "sessionMedium", 'pageReferrer', 'sessionDefaultChannelGroup'),
+    date_range = dateRangeGA,
+    dim_filters = ga_data_filter("pageTitle" == pages),
+    limit = -1
+  ) %>% 
+    arrange(pageTitle) 
+  
+  aquisitionSocial <- correctTraffic(aquisitionSocial, type = 'session') %>% 
+    filter(medium == 'social') %>% 
+    dplyr::group_by(pageTitle, source) %>% 
+    dplyr::summarize(Sessions = sum(sessions),
+                     PageViews = sum(screenPageViews)) %>% 
+    left_join(
+      campaignPages %>%
+        select(pageTitle, campaign_tag) %>%
+        distinct(pageTitle, .keep_all = TRUE), 
+      by = "pageTitle"
+    ) %>%
+    rename(dashboardCampaign = campaign_tag) %>%
+    mutate(site = site) %>%
+    select(pageTitle, source, Sessions, PageViews, site, dashboardCampaign)
+
+  return(aquisitionSocial)
+}
+
+
+
+# # new social function
+# getTrafficSocial2 <- function(propertyID, pages_df, site = 'rmi.org'){
+#   # Ensure pages_df has columns 'pageTitle' and 'campaignID'
+#   
+#   allResults <- list()  # Initialize a list to store results
+#   
+#   for (i in seq_len(nrow(pages_df))) {
+#     page <- pages_df$pageTitle[i]
+#     campaignID <- pages_df$campaignID[i]
+#     
+#     print(paste("Processing page:", page, "with campaignID:", campaignID))  # Debugging
+#     
+#     aquisitionSocial <- ga_data(
+#       propertyID,
+#       metrics = c("sessions", "screenPageViews"),
+#       dimensions = c("pageTitle", "sessionSource", "sessionMedium", 'pageReferrer', 'sessionDefaultChannelGroup'),
+#       date_range = dateRangeGA,
+#       dim_filters = ga_data_filter("pageTitle" == page),
+#       limit = -1
+#     ) %>% 
+#       arrange(pageTitle) 
+#     
+#     aquisitionSocial <- correctTraffic(aquisitionSocial, type = 'session') %>% 
+#       filter(medium == 'social') %>% 
+#       dplyr::group_by(pageTitle, source) %>% 
+#       dplyr::summarize(Sessions = sum(sessions),
+#                        PageViews = sum(screenPageViews)) %>% 
+#       mutate(site = site,
+#              dashboardCampaign = campaignID)
+#     
+#     allResults[[i]] <- aquisitionSocial  # Store the result in the list
+#   }
+#   
+#   # Combine all results into one dataframe
+#   result_df <- do.call(rbind, allResults)
+#   
+#   return(result_df)
+# }
 
 #' get page views broken down by country and region
 getTrafficGeography <- function(propertyID, pages, site = 'rmi.org'){
@@ -519,7 +963,38 @@ getTrafficGeography <- function(propertyID, pages, site = 'rmi.org'){
     dplyr::rename('Region Page Views' = screenPageViews) %>% 
     mutate(pageTitle = gsub(' - RMI', '', pageTitle),
            site = site, 
-           dashboardCampaign = campaignID)
+           dashboardCampaign = campaignID) %>%
+  
+  return(trafficByRegion)
+}
+
+# it should NOT be having only one instance per location
+
+getTrafficGeography2 <- function(propertyID, pages, campaignPages, site = 'rmi.org'){
+  
+  trafficByRegion <- ga_data(
+    propertyID,
+    metrics = c('screenPageViews'),
+    dimensions = c("pageTitle", 'region', 'country'),
+    date_range = dateRangeGA,
+    dim_filters = ga_data_filter("pageTitle" == pages),
+    limit = -1
+  ) %>% 
+    #' filter out regions where page views < 5
+    filter(screenPageViews > 4) %>% 
+    arrange(pageTitle) %>% 
+    dplyr::rename('Region Page Views' = screenPageViews) %>% 
+    mutate(pageTitle = gsub(' - RMI', '', pageTitle),
+           site = site) %>%
+    #distinct(pageTitle, region, .keep_all = TRUE) %>%
+    left_join(
+      campaignPages %>%
+        select(pageTitle, campaign_tag) %>%
+        distinct(pageTitle, .keep_all = TRUE), 
+      by = "pageTitle"
+    ) %>%
+    rename(dashboardCampaign = campaign_tag) %>%
+    
   
   return(trafficByRegion)
 }
@@ -551,7 +1026,8 @@ getAcquisition <- function(propertyID, pages, site = 'rmi.org'){
     #' 2) get conversions
     aquisitionConversions <- ga_data(
       propertyID,
-      metrics = c('conversions:emailFormSubmit', 'conversions:downloadThankYou', 'conversions:donatePageView_Embedded'), # add new custom conversions here
+      metrics = c('conversions:emailFormSubmit', 'conversions:downloadThankYou', 'conversions:donatePageView_Embedded',
+                  'conversions:registerThankYou'), # add new custom conversions here
       dimensions = c("pageTitle", "source", "medium", 'pageReferrer', 'defaultChannelGroup'),
       date_range = dateRangeGA,
       dim_filters = ga_data_filter("pageTitle" == pages),
@@ -559,13 +1035,14 @@ getAcquisition <- function(propertyID, pages, site = 'rmi.org'){
     ) %>% 
       select(pageTitle, source, medium, pageReferrer, defaultChannelGroup, 
              form_submit = 'conversions:emailFormSubmit', download = 'conversions:downloadThankYou', 
-             donate_view = 'conversions:donatePageView_Embedded') %>% # Add new conversions in select function
+             donate_view = 'conversions:donatePageView_Embedded', event_register = 'conversions:registerThankYou') %>% # Add new conversions in select function
       arrange(pageTitle)
     
     aquisitionConversions <- correctTraffic(aquisitionConversions, 'conversion') %>% 
       group_by(pageTitle, defaultChannelGroup) %>% 
       summarize('Downloads' = sum(download),
-                       'Form Submissions' = sum(form_submit), 'DonationPageViews' = sum(donate_view)) # add aggregation for new conversions here 
+                       'Form Submissions' = sum(form_submit), 'DonationPageViews' = sum(donate_view),
+                'EventRegistered' = sum(event_register)) # add aggregation for new conversions here 
     
     #' 3) bind sessions + conversions 
     acquisition <- acquisition %>% 
@@ -624,7 +1101,7 @@ getAllEmailStats <- function(){
   emailStatsPEM <- read_csv('allMCStats.csv', show_col_types = FALSE) %>% 
     mutate(date = as.Date(date))
   
-  #' bind 
+  #' bind - would need to bind scandinavia house emails here
   allEmailStats <- emailStatsSpark %>% 
     plyr::rbind.fill(emailStatsPEM) %>% 
     mutate(date = as.Date(date),
@@ -650,6 +1127,14 @@ getCampaignEmails <- function(pageURLs){
            story_clicks = clicks, 
            story_COR = COR)
   
+  # 
+  # testing_filtered_rows <- df1 %>%
+  #   filter(name == "2024-09-05: Spark" & story_title == "RMI at Climate Week 2024")
+  # 
+  # # Print the filtered rows
+  # print(testing_filtered_rows)
+  
+
   # df2 <- allEmailStats %>% select(c('id':'plaintext_rate', 'url_2':'COR_S2'))
   # names(df2) <- names(df1)
   # 
@@ -670,7 +1155,9 @@ getCampaignEmails <- function(pageURLs){
   allStoryStats <- df1 %>% 
     filter(grepl(paste(pageURLs, collapse = '|'), story_url)) %>% 
     mutate(date = as.Date(date),
-           story_title = gsub(' - RMI', '', story_title))
+           story_title = gsub(' - RMI', '', story_title)) %>%
+    # this line needs to change, wasn't delivered before
+    distinct(name, story_title, delivered, .keep_all = TRUE)
   
   #' order by date and keep relevant columns
   allStoryStats <- allStoryStats[rev(order(allStoryStats$date)),] %>% 
@@ -679,6 +1166,9 @@ getCampaignEmails <- function(pageURLs){
   
   return(allStoryStats)
 }
+
+#n_distinct(allStoryStats$story_url)
+
 
 ##' get individual newsletter clicks - for Salesforce campaign member data frame
 
@@ -700,13 +1190,19 @@ getBatchClicks <- function(emailId, df){
                           add_headers(.headers = header4))
       getClicks <- jsonlite::fromJSON(content(email_clicks, as = "text", encoding = "UTF-8"))
       clicksQuery <- getClicks[["result"]][["emailClick"]]
-    
+      
+      #new
+      # clicksQuery <- clicksQuery %>%
+      #   mutate(across(c(id, prospect_id, list_email_id, email_template_id), as.character))
+      # 
 
       digit <- sub('(.*) ', '', str_match(clicksQuery[200, 'created_at'], " *(.*?)\\s*(:)")[,2])
       if(grepl('^0', digit)){ hour <- '%2' } else { hour <- '%20' }
       nextDate <- gsub(' ', hour, clicksQuery[200, 'created_at'])
       
       allClicks <- allClicks %>% rbind(clicksQuery)
+      #allClicks <- dplyr::bind_rows(allClicks, clicksQuery)
+      
     } else {
       email_clicks <- GET(paste0("https://pi.pardot.com/api/emailClick/version/4/do/query?format=json&created_after=", nextDate, "&list_email_id=", df[emailId, 'id']),
                           add_headers(.headers = header5))
@@ -714,6 +1210,8 @@ getBatchClicks <- function(emailId, df){
       clicksQuery <- as.data.frame(getClicks[["result"]][["emailClick"]])
       
       allClicks <- allClicks %>% rbind(clicksQuery)
+     # allClicks <- dplyr::bind_rows(allClicks, clicksQuery)
+      
       if (nrow(clicksQuery) < 200) break
       
       digit <- sub('(.*) ', '', str_match(clicksQuery[200, 'created_at'], " *(.*?)\\s*(:)")[,2])
@@ -727,7 +1225,7 @@ getBatchClicks <- function(emailId, df){
 
 #' apply getBatchClicks to a list of emailIDs
 #' - returns df with all link clicks attached to those emails
-getProspectClicks <- function(df){
+getProspectClicksOld <- function(df){
   clicksTotal <- data.frame(id = '', prospect_id = '', url = '', list_email_id = '', email_template_id = '', created_at = '')[0,]
   
   for(i in 1:nrow(df)){
@@ -738,14 +1236,43 @@ getProspectClicks <- function(df){
   return(clicksTotal)
 }
 
+getProspectClicks <- function(emailIDs){
+ # clicksTotal <- data.frame(id = '', prospect_id = '', url = '', list_email_id = '', email_template_id = '', created_at = '')[0,]
+  clicksTotal <- data.frame(id = numeric(),
+                            prospect_id = numeric(),
+                            url = character(),
+                            list_email_id = numeric(),
+                            email_template_id = numeric(),
+                            created_at = character(),  # Keep created_at as character for date handling
+                            stringsAsFactors = FALSE)  # Prevent automatic conversion to factors
+  
+  for(i in 1:nrow(emailIDs)){
+    clicks <- getBatchClicks(i, emailIDs)
+    # print(paste("Iteration:", i))
+    # print(paste("Rows in clicks:", nrow(clicks)))
+    # print(paste("Rows in clicksTotal before bind:", nrow(clicksTotal)))
+
+    # clicksTotal <- clicksTotal %>% rbind(clicks)
+    clicksTotal <- dplyr::bind_rows(clicksTotal, clicks)
+    #print(paste("Rows in clicksTotal after bind:", nrow(clicksTotal)))
+    
+  }
+  
+  return(clicksTotal)
+}
+
+#test <- getBatchClicks(i, emailIDs)
+
 #### SALESFORCE ####
+
 
 #' get all prospects (all contacts and leads with Pardot Activity)
 getProspects <- function() {
   
   my_soql <- sprintf("SELECT Id, Name, Account_Name_Text__c, Email,
                              pi__url__c, pi__score__c, pi__last_activity__c,
-                             Giving_Circle__c, Number_of_Days_since_Last_Gift_or_SC__c, AccountId
+                             Giving_Circle__c, Number_of_Days_since_Last_Gift_or_SC__c, AccountId,
+                             Account_Constituent_Groups__c, Account_Constituent_Sub_Groups__c
                            
                     FROM Contact
                     WHERE pi__last_activity__c != null 
@@ -755,17 +1282,20 @@ getProspects <- function() {
     select(Id, Name, Account = Account_Name_Text__c, Email, 
            Pardot_URL = pi__url__c, Pardot_Score = pi__score__c, 
            Giving_Circle = Giving_Circle__c, Last_Gift = Number_of_Days_since_Last_Gift_or_SC__c,
-           AccountId) %>% 
+           AccountId, Account_Constituent_Groups__c, Account_Constituent_Sub_Groups__c) %>% 
     mutate(RecordType = 'Contact')
   
-  my_soql <- sprintf("SELECT Id,  Name, Company, Email, pi__url__c, pi__score__c, pi__last_activity__c
+  
+  my_soql <- sprintf("SELECT Id,  Name, Company, Email, pi__url__c, pi__score__c, pi__last_activity__c,
+   Account_Constituent_Groups__c, Account_Constituent_Sub_Groups__c
 
                     FROM Lead
                     WHERE pi__last_activity__c != null 
                     ORDER BY pi__last_activity__c DESC")
   
   allLeads <- sf_query(my_soql, 'Lead', api_type = "Bulk 1.0") %>% 
-    select(Id, Name, Account = Company, Email, Pardot_URL = pi__url__c, Pardot_Score = pi__score__c) %>% 
+    select(Id, Name, Account = Company, Email, Pardot_URL = pi__url__c, Pardot_Score = pi__score__c,
+           Account_Constituent_Groups__c, Account_Constituent_Sub_Groups__c) %>% 
     mutate(RecordType = 'Lead') %>% 
     #' remove instances of duplicate Pardot URLs (which contains a prosepct's Pardot ID) where one is both a Lead and Contact
     #' by using anti_join to get rid of all Leads if a Contact has the same Pardot URL
@@ -796,10 +1326,11 @@ getProspects <- function() {
   return(unique_prospects)
 }
 
-#' get all accounts from SF
+
+#' get all accounts from SF; ADD CONSTITUENT GROUP HERE?
 getAllAccounts <- function(){
   
-  my_soql <- sprintf("SELECT Id, Name, Type, Industry, Email_Domain__c, D_B_Business_Name__c, D_B_Company_Description__c, 
+  my_soql <- sprintf("SELECT Id, Name, Type, Industry, Constituent_Groups__c, Email_Domain__c, D_B_Business_Name__c, D_B_Company_Description__c, 
                       D_B_Major_Industry_Category_Name__c, D_B_NAICS_Description_1__c, D_B_NAICS_Description_2__c,
                       D_B_SIC4_Code_1_Description__c, D_B_SIC4_Code_2_Description__c,
                       Top_Account__c, Total_Opportunity_Payments__c, of_Gifts__c, Number_of_Open_Opportunities__c,
@@ -808,19 +1339,75 @@ getAllAccounts <- function(){
                     FROM Account")
   
   all_accounts <- sf_query(my_soql, "Account", api_type = "Bulk 1.0") %>% 
-    select(AccountId = Id, Account = Name, AccountType = Type, Industry, AccountDomain = Email_Domain__c,
+    select(AccountId = Id, Account = Name, AccountType = Type, Industry, Constituent_Group = Constituent_Groups__c, AccountDomain = Email_Domain__c,
            Website, DB_Website = D_B_Web_Address__c, DB_IndustryCategory = D_B_Major_Industry_Category_Name__c, NAICS1 = D_B_NAICS_Description_1__c, 
            NAICS2 = D_B_NAICS_Description_2__c, SIC1 = D_B_SIC4_Code_1_Description__c, SIC2 = D_B_SIC4_Code_2_Description__c,
            TopAccount = Top_Account__c, TotalGiving = Total_Opportunity_Payments__c, NumGifts = of_Gifts__c, NumOpenOpps = Number_of_Open_Opportunities__c)
   
+  all_accounts <- all_accounts %>%
+    separate(Constituent_Group, into = c("Constituent_Group_1", "Constituent_Group_2"), sep = ";", fill = "right", extra = "merge")
+  
   return(all_accounts)
 }
+
+
+# testing_all_accounts <- getAllAccounts()
+# 
+# print(head(testing_all_accounts))
+# 
+
+
+# getAllAccounts <- function(){
+#   
+#   my_soql <- sprintf("SELECT Id, Name, Type, Industry, Email_Domain__c, D_B_Business_Name__c, D_B_Company_Description__c, 
+#                       D_B_Major_Industry_Category_Name__c, D_B_NAICS_Description_1__c, D_B_NAICS_Description_2__c,
+#                       D_B_SIC4_Code_1_Description__c, D_B_SIC4_Code_2_Description__c,
+#                       Top_Account__c, Total_Opportunity_Payments__c, of_Gifts__c, Number_of_Open_Opportunities__c,
+#                       Prospect_Program_Interests__c, Affinity__c, Program_Interest_Multi_Select_Text__c, Website, D_B_Web_Address__c, X18_Char_ID__c
+# 
+#                     FROM Account")
+#   
+#   all_accounts <- sf_query(my_soql, "Account", api_type = "Bulk 1.0") %>% 
+#     select(AccountId = Id, Account = Name, AccountType = Type, Industry, AccountDomain = Email_Domain__c,
+#            Website, DB_Website = D_B_Web_Address__c, DB_IndustryCategory = D_B_Major_Industry_Category_Name__c, NAICS1 = D_B_NAICS_Description_1__c, 
+#            NAICS2 = D_B_NAICS_Description_2__c, SIC1 = D_B_SIC4_Code_1_Description__c, SIC2 = D_B_SIC4_Code_2_Description__c,
+#            TopAccount = Top_Account__c, TotalGiving = Total_Opportunity_Payments__c, NumGifts = of_Gifts__c, NumOpenOpps = Number_of_Open_Opportunities__c)
+#   
+#   return(all_accounts)
+# }
 
 #' functions to get reports and events
 
 #' get list of all campaigns created after 2022-01-01
+# getCampaignList <- function(nameOfInterest){
+#   
+#   if (length(nameOfInterest) == 0) {
+#     stop("nameOfInterest must contain at least one valid campaign name.")
+#   }
+#   
+#   nameList <- paste0("'", nameOfInterest, "'", collapse = ", ")
+#   
+#   my_soql <- sprintf("SELECT Id, 
+#                            Name,
+#                            Type,
+#                            Category__c,
+#                            CreatedDate,
+#                            Description,
+#                            Contact_Report__c,
+#                            Members_in_Campaign__c
+#                     FROM Campaign
+#                     WHERE Name in ('%s')", nameList)
+#   print(my_soql)
+#   
+#   
+#   campaignList <- sf_query(my_soql) %>% 
+#     select(Id, Name, Type, CreatedDate, Members = Members_in_Campaign__c)
+#   
+#   return(campaignList)
+# }
+
 getCampaignList <- function(){
-  my_soql <- sprintf("SELECT Id, 
+  my_soql <- sprintf("SELECT Id,
                            Name,
                            Type,
                            Category__c,
@@ -830,13 +1417,387 @@ getCampaignList <- function(){
                            Members_in_Campaign__c
                     FROM Campaign
                     WHERE CreatedDate > 2022-01-01T01:02:03Z")
-  
-  campaignList <- sf_query(my_soql) %>% 
+
+  campaignList <- sf_query(my_soql) %>%
     select(Id, Name, Type, CreatedDate, Members = Members_in_Campaign__c)
-  
+
   return(campaignList)
 }
 
+#new, good, for events
+getCampaignMembersEvents <- function(campaignIdList, campaignType) {
+  
+  #' get campaign members
+  my_soql <- sprintf("SELECT CampaignId,
+                             Name,
+                             Status,
+                             HasResponded,
+                             ContactId,
+                             LeadId,
+                             CreatedDate
+
+                      FROM CampaignMember
+                      WHERE CampaignId in ('%s')",
+                     paste0(campaignIdList, collapse = "','"))
+  
+  campaign_members <- sf_query(my_soql, 'CampaignMember', api_type = "Bulk 1.0") %>% 
+    left_join(select(campaignList, c(CampaignId = Id, CampaignName = Name)), by = 'CampaignId') %>% 
+    filter(!(is.na(as.character(ContactId)) & is.na(LeadId)))
+  
+  if (nrow(campaign_members) == 0) {
+    message("No campaign members found for the provided campaign IDs.")
+    return(data.frame())
+  }
+  
+  campaignContacts <- campaign_members %>% 
+    filter(!is.na(ContactId)) %>% 
+    distinct(ContactId, .keep_all = TRUE) 
+  
+  campaignLeads <- campaign_members %>% 
+    filter(!is.na(LeadId) & is.na(ContactId)) %>% 
+    distinct(LeadId, .keep_all = TRUE) 
+  
+  #' get info for contacts in campaign SHOULD WE BE ADDING CONSITUENTS HERE? Account.Constituent_Groups__c
+  if (nrow(campaignContacts) > 0) {
+    my_soql <- sprintf("SELECT Id, Name, Account_Name_Text__c, Email,
+                               pi__url__c, pi__score__c, pi__last_activity__c,
+                               Giving_Circle__c, Number_of_Days_since_Last_Gift_or_SC__c, AccountId, Account_Constituent_Groups__c,
+                               Account_Constituent_Sub_Groups__c
+                             
+                        FROM Contact
+                        WHERE Id in ('%s')
+                        ORDER BY pi__last_activity__c DESC NULLS LAST",
+                       paste0(campaignContacts$ContactId, collapse = "','"))
+    
+    campaignContactsQuery <- sf_query(my_soql, 'Contact', api_type = "Bulk 1.0") %>% 
+      select(Id, Name, Account = Account_Name_Text__c, Email,
+             Pardot_URL = pi__url__c, Pardot_Score = pi__score__c,  Giving_Circle = Giving_Circle__c,
+             Last_Gift = Number_of_Days_since_Last_Gift_or_SC__c,
+             AccountId, Account_Constituent_Groups__c, Account_Constituent_Sub_Groups__c) %>% 
+      mutate(RecordType = 'Contact') %>% 
+      filter(!is.na(AccountId))
+  } else {
+    campaignContactsQuery <- data.frame()
+  }
+  
+  #' get info for leads in campaign SHOULD WE BE ADDING CONSITUENTS HERE? Likely_Account__r.Constituent_Groups__c
+  if (nrow(campaignLeads) > 0) {
+    my_soql <- sprintf("SELECT Id,  Name, Company, Email, pi__url__c, pi__score__c, pi__last_activity__c, 
+    Account_Constituent_Groups__c, Account_Constituent_Sub_Groups__c
+
+                        FROM Lead
+                        WHERE Id in ('%s')
+                        ORDER BY pi__last_activity__c DESC NULLS LAST",
+                       paste0(campaignLeads$LeadId, collapse = "','"))
+    
+    campaignLeadsQuery <- sf_query(my_soql, 'Lead', api_type = "Bulk 1.0") %>% 
+      select(Id, Name, Account = Company, Email, Pardot_URL = pi__url__c, Pardot_Score = pi__score__c,
+             Account_Constituent_Groups__c, Account_Constituent_Sub_Groups__c) %>% 
+      mutate(RecordType = 'Lead') 
+  } else {
+    campaignLeadsQuery <- data.frame()
+  } 
+  
+  # print(head(campaignLeadsQuery))
+  
+  #' get info for accounts that match the AccountID field pulled from contacts query ADDING CONSTITUENTS HERE?
+  if (!is.null(campaignContactsQuery$AccountId) && length(campaignContactsQuery$AccountId) > 0) {
+    my_soql <- sprintf("SELECT Id, Name, Type, Industry, Email_Domain__c, D_B_Business_Name__c, D_B_Company_Description__c, 
+                        D_B_Major_Industry_Category_Name__c, D_B_NAICS_Description_1__c, D_B_NAICS_Description_2__c,
+                        D_B_SIC4_Code_1_Description__c, D_B_SIC4_Code_2_Description__c,
+                        Top_Account__c, Total_Opportunity_Payments__c, Number_of_Open_Opportunities__c,
+                        Constituent_Groups__c, Constituent_Sub_Groups__c
+                        FROM Account 
+                        WHERE Id in ('%s')", 
+                       paste0(campaignContactsQuery$AccountId, collapse = "','"))
+    
+    campaignContactAccounts <- sf_query(my_soql, 'Account', api_type = "Bulk 1.0") %>% 
+      select(AccountId = Id, Account = Name, AccountType = Type, Industry, AccountDomain = Email_Domain__c,
+             TotalGiving = Total_Opportunity_Payments__c, NumOpenOpps = Number_of_Open_Opportunities__c, Constituent_Groups__c,
+             Constituent_Sub_Groups__c)
+  } else {
+    campaignContactAccounts <- data.frame()
+  }
+  
+  #' join
+  if (nrow(campaignContactsQuery) > 0) {
+    campaignContactsQuery <- campaignContactsQuery %>% 
+      left_join(select(campaignContactAccounts, -Account), by = c('AccountId'))
+  }
+  
+  if (nrow(campaignLeadsQuery) > 0) {
+    campaignLeadsQuery <- campaignLeadsQuery %>% 
+      left_join(campaignContactAccounts, by = c('Account'))
+  }
+  
+  contactsLeads <- plyr::rbind.fill(campaignContactsQuery, campaignLeadsQuery) %>% 
+    mutate(Giving_Circle = as.character(Giving_Circle))
+  
+  
+  #' join to campaign members df
+  CampaignMembers <- campaign_members %>% 
+    mutate(Id = ifelse(is.na(ContactId), LeadId, ContactId)) %>% 
+    select(CampaignId, CampaignName, Name, Id, Status, CreatedDate) %>% 
+    left_join(contactsLeads, by = c('Id', 'Name'))
+  
+  #' specify campaign type
+  if(campaignType == 'Event'){
+    
+    #' CampaignMembers <- CampaignMembers %>% 
+    #'   mutate(EngagementType = 'Event',
+    #'          #' rename status categories and filter for rows where status is "registered" or "attended"
+    #'          #' Updated on 1/17/24 to included registrations as attended
+    #'          #' "Registered - In Person", "WAITLIST" , "Registered - Virtual", and "Clicked to Register"
+    #'          # Status = ifelse(grepl('Register', Status), 'Registered (Did Not Attend)', Status),
+    #'          Status = case_when(grepl('Register', Status) ~ 'Attended',
+    #'                             grepl('WAITLIST', Status) ~ 'Attended',
+    #'                             TRUE ~ Status)) %>%
+    #'   new
+    CampaignMembers <- CampaignMembers %>% 
+      mutate(
+        EngagementType = 'Event',
+        Status = case_when(
+          grepl("Attended|Speaker|\\+1 Speaker Guest", Status) ~ 'Attended',
+          
+          grepl("Attended|Speaker|\\+1 Speaker Guest|Registered|Waitlist|Attending|WAITLIST|De-registered", Status) ~ 'Registered',
+          
+          # Keep the original Status for other values
+          TRUE ~ Status
+        )
+      ) %>%
+    #used to have Attending
+      filter(grepl('Registered|Attended', Status))
+      #campaignIdList = c(test_campaign_id)
+    
+  } else if (campaignType == 'Report'){
+    
+    CampaignMembers <- CampaignMembers %>% 
+      mutate(EngagementType = 'Report Download') 
+    
+  }
+  
+  CampaignMembers <- CampaignMembers %>% 
+    #' get domain from email
+    mutate(Domain = sub("(.*)\\@", "", Email),
+           EngagementDate = as.Date(CreatedDate, format = "%Y-%m-%d")) %>% 
+    #' select and reorder columns
+    select(CampaignName, EngagementType, Id, RecordType, Status, EngagementDate, Name, Email, Domain, Account, AccountType, Industry, 
+           TotalGiving, NumOpenOpps, Pardot_Score, Pardot_URL, Giving_Circle, Last_Gift, AccountId, Account_Constituent_Groups__c,
+           Account_Constituent_Sub_Groups__c)
+  
+  return(CampaignMembers)
+  
+}
+
+# testing for eventid that isnt working, 10/23
+#new, good, for events
+testingGetCampaignMembersEvents <- function(campaignIdList, campaignType) {
+  
+  #' get campaign members
+  my_soql <- sprintf("SELECT CampaignId,
+                             Name,
+                             Status,
+                             HasResponded,
+                             ContactId,
+                             LeadId,
+                             CreatedDate
+
+                      FROM CampaignMember
+                      WHERE CampaignId in ('%s')",
+                     paste0(campaignIdList, collapse = "','"))
+  
+  campaign_members <- sf_query(my_soql, 'CampaignMember', api_type = "Bulk 1.0") %>% 
+    left_join(select(campaignList, c(CampaignId = Id, CampaignName = Name)), by = 'CampaignId') %>% 
+    filter(!(is.na(as.character(ContactId)) & is.na(LeadId)))
+  
+  print("Campaign Members:")
+  print(head(campaign_members))
+
+  if (nrow(campaign_members) == 0) {
+    message("No campaign members found for the provided campaign IDs.")
+    return(data.frame())
+  }
+  
+  campaignContacts <- campaign_members %>% 
+    filter(!is.na(ContactId)) %>% 
+    distinct(ContactId, .keep_all = TRUE) 
+  
+   
+  message("Preview of campaignContacts:")
+  print(head(campaignContacts)) 
+  
+  # used to be &
+  campaignLeads <- campaign_members %>% 
+    filter(!is.na(LeadId) & is.na(ContactId)) %>% 
+    distinct(LeadId, .keep_all = TRUE) 
+  
+  message("Preview of campaignLeads:")
+  print(head(campaignLeads))   
+  
+  #' get info for contacts in campaign SHOULD WE BE ADDING CONSITUENTS HERE? Account.Constituent_Groups__c
+  if (nrow(campaignContacts) > 0) {
+    my_soql <- sprintf("SELECT Id, Name, Account_Name_Text__c, Email,
+                               pi__url__c, pi__score__c, pi__last_activity__c,
+                               Giving_Circle__c, Number_of_Days_since_Last_Gift_or_SC__c, AccountId, Account_Constituent_Groups__c,
+                               Account_Constituent_Sub_Groups__c
+                             
+                        FROM Contact
+                        WHERE Id in ('%s')
+                        ORDER BY pi__last_activity__c DESC NULLS LAST",
+                       paste0(campaignContacts$ContactId, collapse = "','"))
+    
+    campaignContactsQuery <- sf_query(my_soql, 'Contact', api_type = "Bulk 1.0") %>% 
+      select(Id, Name, Account = Account_Name_Text__c, Email,
+             Pardot_URL = pi__url__c, Pardot_Score = pi__score__c,  Giving_Circle = Giving_Circle__c,
+             Last_Gift = Number_of_Days_since_Last_Gift_or_SC__c,
+             AccountId, Account_Constituent_Groups__c, Account_Constituent_Sub_Groups__c) %>% 
+      mutate(RecordType = 'Contact') %>% 
+      filter(!is.na(AccountId))
+  } else {
+    campaignContactsQuery <- data.frame()
+  }
+  
+  message("Preview of campaignContactsQuery:")
+  print(head(campaignContactsQuery))   
+  
+  #' get info for leads in campaign SHOULD WE BE ADDING CONSITUENTS HERE? Likely_Account__r.Constituent_Groups__c
+  if (nrow(campaignLeads) > 0) {
+    my_soql <- sprintf("SELECT Id,  Name, Company, Email, pi__url__c, pi__score__c, pi__last_activity__c, 
+    Account_Constituent_Groups__c, Account_Constituent_Sub_Groups__c
+
+                        FROM Lead
+                        WHERE Id in ('%s')
+                        ORDER BY pi__last_activity__c DESC NULLS LAST",
+                       paste0(campaignLeads$LeadId, collapse = "','"))
+    
+    campaignLeadsQuery <- sf_query(my_soql, 'Lead', api_type = "Bulk 1.0") %>% 
+      select(Id, Name, Account = Company, Email, Pardot_URL = pi__url__c, Pardot_Score = pi__score__c,
+             Account_Constituent_Groups__c, Account_Constituent_Sub_Groups__c) %>% 
+      mutate(RecordType = 'Lead') 
+  } else {
+    campaignLeadsQuery <- data.frame()
+  } 
+  
+  
+  message("Preview of campaignLeadsQuery:")
+  print(head(campaignLeadsQuery))   
+  
+  # print(head(campaignLeadsQuery))
+  
+  #' get info for accounts that match the AccountID field pulled from contacts query ADDING CONSTITUENTS HERE?
+  if (!is.null(campaignContactsQuery$AccountId) && length(campaignContactsQuery$AccountId) > 0) {
+    my_soql <- sprintf("SELECT Id, Name, Type, Industry, Email_Domain__c, D_B_Business_Name__c, D_B_Company_Description__c, 
+                        D_B_Major_Industry_Category_Name__c, D_B_NAICS_Description_1__c, D_B_NAICS_Description_2__c,
+                        D_B_SIC4_Code_1_Description__c, D_B_SIC4_Code_2_Description__c,
+                        Top_Account__c, Total_Opportunity_Payments__c, Number_of_Open_Opportunities__c,
+                        Constituent_Groups__c, Constituent_Sub_Groups__c
+                        FROM Account 
+                        WHERE Id in ('%s')", 
+                       paste0(campaignContactsQuery$AccountId, collapse = "','"))
+    
+    campaignContactAccounts <- sf_query(my_soql, 'Account', api_type = "Bulk 1.0") %>% 
+      select(AccountId = Id, Account = Name, AccountType = Type, Industry, AccountDomain = Email_Domain__c,
+             TotalGiving = Total_Opportunity_Payments__c, NumOpenOpps = Number_of_Open_Opportunities__c, Constituent_Groups__c,
+             Constituent_Sub_Groups__c)
+  } else {
+    campaignContactAccounts <- data.frame()
+  }
+  
+  message("Preview of campaignContactAccounts:")
+  print(head(campaignContactAccounts))   
+  
+  
+  #' join
+  if (nrow(campaignContactsQuery) > 0) {
+    campaignContactsQuery <- campaignContactsQuery %>% 
+      left_join(select(campaignContactAccounts, -Account), by = c('AccountId'))
+  }
+  
+  if (nrow(campaignLeadsQuery) > 0) {
+    campaignLeadsQuery <- campaignLeadsQuery %>% 
+      left_join(campaignContactAccounts, by = c('Account'))
+  }
+  
+  contactsLeads <- plyr::rbind.fill(campaignContactsQuery, campaignLeadsQuery) %>% 
+    mutate(Giving_Circle = as.character(Giving_Circle))
+  
+  
+  
+  message("Preview of contactsLeads:")
+  print(head(contactsLeads))   
+  
+  #' join to campaign members df
+  CampaignMembers <- campaign_members %>% 
+    mutate(Id = ifelse(is.na(ContactId), LeadId, ContactId)) %>% 
+    select(CampaignId, CampaignName, Name, Id, Status, CreatedDate) %>% 
+    left_join(contactsLeads, by = c('Id', 'Name'))
+  
+  
+  message("Preview of CampaignMembers:")
+  print(head(CampaignMembers)) 
+  
+  #message("Campaign Type: ", campaignType)
+  
+  #' specify campaign type
+  if(campaignType == 'Event'){
+    
+    message("Unique Status values before transformation:")
+    print(unique(CampaignMembers$Status))
+    
+    CampaignMembers <- CampaignMembers %>% 
+      mutate(
+        EngagementType = 'Event',
+        Status = case_when(
+          grepl("Attended( - Staff)?|Speaker|\\+1 Speaker Guest", Status) ~ 'Attended',
+          #grepl("Attended|Speaker|\\+1 Speaker Guest|Registered|Waitlist|Attending|WAITLIST|De-registered|Clicked to Register", Status) ~ 'Registered',
+          
+          grepl("Attended( - Staff)?|Speaker|\\+1 Speaker Guest|Registered - Full Day|De-registered|Registered - High Priority|Registered - Staff|Waitlist|Registered but did not attend|Registered - Hybrid|Registered - In Person|Registered - Virtual|Attending|WAITLIST", Status) ~ 'Registered',
+          
+          TRUE ~ 'Other'
+        )
+      ) %>%
+    # this changed
+      # { 
+      #   message("Unique Status values before filtering: ", 
+      #           paste(unique(.$Status), collapse = ", "))
+      #   . 
+      # } %>%
+      # 
+      filter(grepl('Register|Attended|Other', Status))
+    # 
+  } else if (campaignType == 'Report'){
+    
+    CampaignMembers <- CampaignMembers %>% 
+      mutate(EngagementType = 'Report Download') 
+    
+  }
+  
+  message("Preview of CampaignMembers:")
+  print(head(CampaignMembers)) 
+  
+  CampaignMembers <- CampaignMembers %>% 
+    #' get domain from email
+    mutate(Domain = sub("(.*)\\@", "", Email),
+           EngagementDate = as.Date(CreatedDate, format = "%Y-%m-%d")) %>% 
+    #' select and reorder columns
+    select(CampaignName, EngagementType, Id, RecordType, Status, EngagementDate, Name, Email, Domain, Account, AccountType, Industry, 
+           TotalGiving, NumOpenOpps, Pardot_Score, Pardot_URL, Giving_Circle, Last_Gift, AccountId, Account_Constituent_Groups__c,
+           Account_Constituent_Sub_Groups__c)
+  
+  message("Preview of CampaignMembers:")
+  print(CampaignMembers)
+  return(CampaignMembers)
+
+  
+}
+
+test_campaign_id <- "701Qk00000HVMUGIA5"
+
+result <- testingGetCampaignMembersEvents(campaignIdList = c(test_campaign_id), campaignType = "Event")
+
+
+
+#og
 #' for a list of campaign IDs, get campaign members and join to contact/lead/account info
 getCampaignMembers <- function(campaignIdList, campaignType) {
   
@@ -856,7 +1817,7 @@ getCampaignMembers <- function(campaignIdList, campaignType) {
   campaign_members <- sf_query(my_soql, 'CampaignMember', api_type = "Bulk 1.0") %>% 
     left_join(select(campaignList, c(CampaignId = Id, CampaignName = Name)), by = 'CampaignId') %>% 
     filter(!(is.na(as.character(ContactId)) & is.na(LeadId)))
-  
+
   campaignContacts <- campaign_members %>% 
     filter(!is.na(ContactId)) %>% 
     distinct(ContactId, .keep_all = TRUE) 
@@ -865,26 +1826,29 @@ getCampaignMembers <- function(campaignIdList, campaignType) {
     filter(!is.na(LeadId) & is.na(ContactId)) %>% 
     distinct(LeadId, .keep_all = TRUE) 
   
-  #' get info for contacts in campaign
+  #' get info for contacts in campaign SHOULD WE BE ADDING CONSITUENTS HERE? Account.Constituent_Groups__c
   my_soql <- sprintf("SELECT Id, Name, Account_Name_Text__c, Email,
                              pi__url__c, pi__score__c, pi__last_activity__c,
-                             Giving_Circle__c, Number_of_Days_since_Last_Gift_or_SC__c, AccountId
+                             Giving_Circle__c, Number_of_Days_since_Last_Gift_or_SC__c, AccountId, Account_Constituent_Groups__c,
+                             Account_Constituent_Sub_Groups__c
                            
                     FROM Contact
                     WHERE Id in ('%s')
                     ORDER BY pi__last_activity__c DESC NULLS LAST",
-                     paste0(campaignContacts$ContactId, collapse = "','"))
+                    paste0(campaignContacts$ContactId, collapse = "','"))
   
   campaignContactsQuery <- sf_query(my_soql, 'Contact', api_type = "Bulk 1.0") %>% 
-    select(Id, Name, Account = Account_Name_Text__c, Email, 
-           Pardot_URL = pi__url__c, Pardot_Score = pi__score__c, 
-           Giving_Circle = Giving_Circle__c, Last_Gift = Number_of_Days_since_Last_Gift_or_SC__c,
-           AccountId) %>% 
+    select(Id, Name, Account = Account_Name_Text__c, Email,
+           Pardot_URL = pi__url__c, Pardot_Score = pi__score__c,  Giving_Circle = Giving_Circle__c,
+           Last_Gift = Number_of_Days_since_Last_Gift_or_SC__c,
+           AccountId, Account_Constituent_Groups__c, Account_Constituent_Sub_Groups__c) %>% 
     mutate(RecordType = 'Contact') %>% 
     filter(!is.na(AccountId))
-  
-  #' get info for leads in campaign
-  my_soql <- sprintf("SELECT Id,  Name, Company, Email, pi__url__c, pi__score__c, pi__last_activity__c
+
+  #' get info for leads in campaign SHOULD WE BE ADDING CONSITUENTS HERE? Likely_Account__r.Constituent_Groups__c
+  my_soql <- sprintf("SELECT Id,  Name, Company, Email, pi__url__c, pi__score__c, pi__last_activity__c, 
+  Account_Constituent_Groups__c, Account_Constituent_Sub_Groups__c
+
 
                       FROM Lead
                       WHERE Id in ('%s')
@@ -892,15 +1856,19 @@ getCampaignMembers <- function(campaignIdList, campaignType) {
                      paste0(campaignLeads$LeadId, collapse = "','"))
   
   campaignLeadsQuery <- sf_query(my_soql, 'Lead', api_type = "Bulk 1.0") %>% 
-    select(Id, Name, Account = Company, Email, Pardot_URL = pi__url__c, Pardot_Score = pi__score__c) %>% 
+    select(Id, Name, Account = Company, Email, Pardot_URL = pi__url__c, Pardot_Score = pi__score__c,
+           Account_Constituent_Groups__c, Account_Constituent_Sub_Groups__c) %>% 
     mutate(RecordType = 'Lead') 
+
+ # print(head(campaignLeadsQuery))
   
-  #' get info for accounts that match the AccountID field pulled from contacts query
+  #' get info for accounts that match the AccountID field pulled from contacts query ADDING CONSTITUENTS HERE?
   my_soql <- sprintf("SELECT Id, Name, Type, Industry, Email_Domain__c, D_B_Business_Name__c, D_B_Company_Description__c, 
                       D_B_Major_Industry_Category_Name__c, D_B_NAICS_Description_1__c, D_B_NAICS_Description_2__c,
                       D_B_SIC4_Code_1_Description__c, D_B_SIC4_Code_2_Description__c,
                       Top_Account__c, Total_Opportunity_Payments__c, of_Gifts__c, Number_of_Open_Opportunities__c,
-                      Prospect_Program_Interests__c, Affinity__c, Program_Interest_Multi_Select_Text__c
+                      Prospect_Program_Interests__c, Affinity__c, Program_Interest_Multi_Select_Text__c, Constituent_Groups__c,
+                      Constituent_Sub_Groups__c
 
                       FROM Account 
                       WHERE Id in ('%s')", 
@@ -908,17 +1876,24 @@ getCampaignMembers <- function(campaignIdList, campaignType) {
   
   campaignContactAccounts <- sf_query(my_soql, 'Account', api_type = "Bulk 1.0") %>% 
     select(AccountId = Id, Account = Name, AccountType = Type, Industry, AccountDomain = Email_Domain__c,
-           TotalGiving = Total_Opportunity_Payments__c, NumOpenOpps = Number_of_Open_Opportunities__c)
-  
+           TotalGiving = Total_Opportunity_Payments__c, NumOpenOpps = Number_of_Open_Opportunities__c, Constituent_Groups__c,
+           Constituent_Sub_Groups__c)
+
+
   #' join
   campaignContactsQuery <- campaignContactsQuery %>% 
-    left_join(select(campaignContactAccounts, -Account), by = c('AccountId'))
+  #  left_join(select(campaignContactAccounts, AccountId, Constituent_Groups__c, everything()), by = c('AccountId')) 
+    left_join(select(campaignContactAccounts, -Account), by = c('AccountId')) 
+#    mutate(ConstituentGroups = Account.Constituent_Groups__c)  # Added constituent groups for contacts
   
   campaignLeadsQuery <- campaignLeadsQuery %>% 
-    left_join(campaignContactAccounts, by = c('Account')) 
+    left_join(campaignContactAccounts, by = c('Account'))
+ #   mutate(ConstituentGroups = Likely_Account_Constituent_Groups)  # Added constituent groups for leads
   
   contactsLeads <- campaignContactsQuery %>%
     plyr::rbind.fill(campaignLeadsQuery) 
+  
+  contactsLeads <- contactsLeads %>% mutate(Giving_Circle = as.character(Giving_Circle))
   
   #' join to campaign members df
   CampaignMembers <- campaign_members %>% 
@@ -941,9 +1916,7 @@ getCampaignMembers <- function(campaignIdList, campaignType) {
       
       filter(grepl('Register|Attended', Status))
     
-  } 
-  
-  else if (campaignType == 'Report'){
+  } else if (campaignType == 'Report'){
     
     CampaignMembers <- CampaignMembers %>% 
       mutate(EngagementType = 'Report Download') 
@@ -953,14 +1926,158 @@ getCampaignMembers <- function(campaignIdList, campaignType) {
   CampaignMembers <- CampaignMembers %>% 
     #' get domain from email
     mutate(Domain = sub("(.*)\\@", "", Email),
-           EngagementDate = as.Date(CreatedDate, format = "%Y-%m-%d")) %>% 
+          EngagementDate = as.Date(CreatedDate, format = "%Y-%m-%d")) %>% 
     #' select and reorder columns
     select(CampaignName, EngagementType, Id, RecordType, Status, EngagementDate, Name, Email, Domain, Account, AccountType, Industry, 
-           TotalGiving, NumOpenOpps, Pardot_Score, Pardot_URL, Giving_Circle, Last_Gift, AccountId)
+           TotalGiving, NumOpenOpps, Pardot_Score, Pardot_URL, Giving_Circle, Last_Gift, AccountId, Account_Constituent_Groups__c,
+           Account_Constituent_Sub_Groups__c)
   
   return(CampaignMembers)
   
 }
+
+
+#testing
+# my_soql_test <- "SELECT Id, Name, Constituent_Groups__c FROM Account WHERE Constituent_Groups__c != NULL LIMIT 10"
+# test_result <- sf_query(my_soql_test, "Account", api_type = "Bulk 1.0")
+# print(test_result)
+# 
+# #testing
+# my_soql_test2 <- "SELECT Id, Name, Account.Constituent_Groups__c FROM Contact WHERE Account.Constituent_Groups__c != NULL LIMIT 10"
+# test_result2 <- sf_query(my_soql_test, "Contact", api_type = "Bulk 2.0")
+# print(test_result2)
+# 
+# my_soql_test3 <- "SELECT Id, Name, Likely_Account__r.Constituent_Groups__c FROM Lead LIMIT 10"
+# test_result3 <- sf_query(my_soql_test, "Lead", api_type = "REST")
+# print(test_result3)
+
+
+
+
+## NEW GET CAMPAIGNMEMBERS
+#' getCampaignMembers2 <- function(nameOfInterest, campaignType) {
+#'   
+#'   #' get campaign members
+#'   my_soql <- sprintf("SELECT CampaignId,
+#'                              Name,
+#'                              Status,
+#'                              HasResponded,
+#'                              ContactId,
+#'                              LeadId,
+#'                              CreatedDate
+#' 
+#'                       FROM CampaignMember
+#'                       WHERE Name in ('%s')",
+#'                      paste0(nameOfInterest, collapse = "','"))
+#'   
+#'   campaign_members <- sf_query(my_soql, 'CampaignMember', api_type = "Bulk 1.0")%>% 
+#'     left_join(select(campaignList, c(CampaignId = Id, CampaignName = Name)), by = 'CampaignId') %>% 
+#'     filter(!(is.na(as.character(ContactId)) & is.na(LeadId)))
+#'   
+#'   campaignContacts <- campaign_members %>% 
+#'     filter(!is.na(ContactId)) %>% 
+#'     distinct(ContactId, .keep_all = TRUE) 
+#'   
+#'   campaignLeads <- campaign_members %>% 
+#'     filter(!is.na(LeadId) & is.na(ContactId)) %>% 
+#'     distinct(LeadId, .keep_all = TRUE) 
+#'   
+#'   #' get info for contacts in campaign
+#'   my_soql <- sprintf("SELECT Id, Name, Account_Name_Text__c, Email,
+#'                              pi__url__c, pi__score__c, pi__last_activity__c,
+#'                              Giving_Circle__c, Number_of_Days_since_Last_Gift_or_SC__c, AccountId
+#'                            
+#'                     FROM Contact
+#'                     WHERE Id in ('%s')
+#'                     ORDER BY pi__last_activity__c DESC NULLS LAST",
+#'                      paste0(campaignContacts$ContactId, collapse = "','"))
+#'   
+#'   campaignContactsQuery <- sf_query(my_soql, 'Contact', api_type = "Bulk 1.0") %>% 
+#'     select(Id, Name, Account = Account_Name_Text__c, Email, 
+#'            Pardot_URL = pi__url__c, Pardot_Score = pi__score__c, 
+#'            Giving_Circle = Giving_Circle__c, Last_Gift = Number_of_Days_since_Last_Gift_or_SC__c,
+#'            AccountId) %>% 
+#'     mutate(RecordType = 'Contact') %>% 
+#'     filter(!is.na(AccountId))
+#'   
+#'   #' get info for leads in campaign
+#'   my_soql <- sprintf("SELECT Id,  Name, Company, Email, pi__url__c, pi__score__c, pi__last_activity__c
+#' 
+#'                       FROM Lead
+#'                       WHERE Id in ('%s')
+#'                       ORDER BY pi__last_activity__c DESC NULLS LAST",
+#'                      paste0(campaignLeads$LeadId, collapse = "','"))
+#'   
+#'   campaignLeadsQuery <- sf_query(my_soql, 'Lead', api_type = "Bulk 1.0") %>% 
+#'     select(Id, Name, Account = Company, Email, Pardot_URL = pi__url__c, Pardot_Score = pi__score__c) %>% 
+#'     mutate(RecordType = 'Lead') 
+#'   
+#'   #' get info for accounts that match the AccountID field pulled from contacts query
+#'   my_soql <- sprintf("SELECT Id, Name, Type, Industry, Email_Domain__c, D_B_Business_Name__c, D_B_Company_Description__c, 
+#'                       D_B_Major_Industry_Category_Name__c, D_B_NAICS_Description_1__c, D_B_NAICS_Description_2__c,
+#'                       D_B_SIC4_Code_1_Description__c, D_B_SIC4_Code_2_Description__c,
+#'                       Top_Account__c, Total_Opportunity_Payments__c, of_Gifts__c, Number_of_Open_Opportunities__c,
+#'                       Prospect_Program_Interests__c, Affinity__c, Program_Interest_Multi_Select_Text__c
+#' 
+#'                       FROM Account 
+#'                       WHERE Id in ('%s')", 
+#'                      paste0(campaignContactsQuery$AccountId, collapse = "','"))
+#'   
+#'   campaignContactAccounts <- sf_query(my_soql, 'Account', api_type = "Bulk 1.0") %>% 
+#'     select(AccountId = Id, Account = Name, AccountType = Type, Industry, AccountDomain = Email_Domain__c,
+#'            TotalGiving = Total_Opportunity_Payments__c, NumOpenOpps = Number_of_Open_Opportunities__c)
+#'   
+#'   #' join
+#'   campaignContactsQuery <- campaignContactsQuery %>% 
+#'     left_join(select(campaignContactAccounts, -Account), by = c('AccountId'))
+#'   
+#'   campaignLeadsQuery <- campaignLeadsQuery %>% 
+#'     left_join(campaignContactAccounts, by = c('Account')) 
+#'   
+#'   contactsLeads <- campaignContactsQuery %>%
+#'     plyr::rbind.fill(campaignLeadsQuery) 
+#'   
+#'   #' join to campaign members df
+#'   CampaignMembers <- campaign_members %>% 
+#'     mutate(Id = ifelse(is.na(ContactId), LeadId, ContactId)) %>% 
+#'     select(CampaignId, CampaignName, Name, Id, Status, CreatedDate) %>% 
+#'     left_join(contactsLeads, by = c('Id', 'Name'))
+#'   
+#'   #' specify campaign type
+#'   if(campaignType == 'Event'){
+#'     
+#'     CampaignMembers <- CampaignMembers %>% 
+#'       mutate(EngagementType = 'Event',
+#'              #' rename status categories and filter for rows where status is "registered" or "attended"
+#'              #' Updated on 1/17/24 to included registrations as attended
+#'              #' "Registered - In Person", "WAITLIST" , "Registered - Virtual", and "Clicked to Register"
+#'              # Status = ifelse(grepl('Register', Status), 'Registered (Did Not Attend)', Status),
+#'              Status = case_when(grepl('Register', Status) ~ 'Attended',
+#'                                 grepl('WAITLIST', Status) ~ 'Attended',
+#'                                 TRUE ~ Status)) %>%
+#'       
+#'       filter(grepl('Register|Attended', Status))
+#'     
+#'   } 
+#'   
+#'   else if (campaignType == 'Report'){
+#'     
+#'     CampaignMembers <- CampaignMembers %>% 
+#'       mutate(EngagementType = 'Report Download') 
+#'     
+#'   }
+#'   
+#'   CampaignMembers <- CampaignMembers %>% 
+#'     #' get domain from email
+#'     mutate(Domain = sub("(.*)\\@", "", Email),
+#'            EngagementDate = as.Date(CreatedDate, format = "%Y-%m-%d")) %>% 
+#'     #' select and reorder columns
+#'     select(CampaignName, EngagementType, Id, RecordType, Status, EngagementDate, Name, Email, Domain, Account, AccountType, Industry, 
+#'            TotalGiving, NumOpenOpps, Pardot_Score, Pardot_URL, Giving_Circle, Last_Gift, AccountId)
+#'   
+#'   return(CampaignMembers)
+#'   
+#' }
 
 ##' get campaigns and clean 
 cleanCampaignDF <- function(df){
@@ -1044,29 +2161,227 @@ cleanCampaignDF <- function(df){
            LapsedDonorsTF = ifelse((LastGift > 549 & LastGift < 1825), 1, NA),
            Engagements = ifelse(!grepl('Registered', Status), 1, NA)) %>% 
     #' select and reorder columns
+    # mutate(
+    #   Account_Constituent_Groups__c = coalesce(Account_Constituent_Groups__c, AccountsName), 
+    #   Account_Constituent_Sub_Groups__c = coalesce(Account_Constituent_Sub_Groups__c, AccountsIndustry)
+    # ) %>%
     select(CampaignName, EngagementType, Icon, Id, Status, EngagementDate, Domain, Email, 
            DonorType, AccountId, Account, AccountType, Audience1, Audience2, Industry, TotalGiving, Name, Pardot_Score,
-           Pardot_URL, Pardot_ID, GivingCircleTF, SolutionsCouncilTF, InnovatorsCircleTF, OpenOppTF, DonorTF, LapsedDonorsTF, DownloadTF, EventTF, EmailClickTF, Engagements) 
+           Pardot_URL, Pardot_ID, GivingCircleTF, SolutionsCouncilTF, InnovatorsCircleTF, OpenOppTF, DonorTF, LapsedDonorsTF, DownloadTF, EventTF, 
+           EmailClickTF, Engagements, Account_Constituent_Groups__c, Account_Constituent_Sub_Groups__c, identifyingID, campaignID) 
+    # separate(Account_Constituent_Groups__c, 
+    #          into = c("Constituent Group 1", "Constituent Group 2", "Constituent Group 3"), 
+    #          sep = ";", 
+    #          fill = "right",   # this will fill any missing values to the right with NA
+    #          extra = "drop") %>%
+    # separate(Account_Constituent_Sub_Groups__c, 
+    #          into = c("Constituent SubGroup 1", "Constituent SubGroup 2", "Constituent SubGroup 3"), 
+    #          sep = ";", 
+    #          fill = "right",   # this will fill any missing values to the right with NA
+    #          extra = "drop") 
+    # 
   
   return(df)
 }
 
-##' get campaign member data for reports (SF)
+
 getSalesforceReports <- function(){
-  
+
   message('getting reports')
-  campaignMembersReports <- getCampaignMembers(campaignReports$reportID, 'Report') 
-  campaignMembersReports <- cleanCampaignDF(campaignMembersReports)
+  campaignMembersReports <- data.frame()
   
+  for (i in seq_along(reportID_data$reportID)) {
+    
+    # Get the reportID and corresponding campaignID
+    current_reportID <- reportID_data$reportID[i]
+    current_campaignID <- reportID_data$IDCampaignID[i]
+    
+    # Retrieve the campaign members for this specific reportID
+    campaignMembers <- getCampaignMembers(current_reportID, 'Report')
+    
+    # Add the reportID and campaignID as new columns
+    campaignMembers <- campaignMembers %>%
+      mutate(identifyingID = current_reportID, campaignID = current_campaignID)
+    
+    # Combine the results with previous iterations
+    campaignMembersReports <- bind_rows(campaignMembersReports, campaignMembers)
+  }
+  
+  reportID_map <- campaignMembersReports %>%
+    filter(!is.na(identifyingID)) %>%
+    select(CampaignName, identifyingID, campaignID) %>%
+    distinct()
+  
+  campaignMembersReports <- campaignMembersReports %>%
+    left_join(reportID_map, by = "CampaignName", suffix = c("", "_filled")) %>%
+    mutate(
+      identifyingID = coalesce(identifyingID, identifyingID_filled),
+      campaignID = coalesce(campaignID, campaignID_filled)
+    ) %>%
+    select(-identifyingID_filled, -campaignID_filled)
+  
+  
+  campaignMembersReports <- cleanCampaignDF(campaignMembersReports)
+
   return(campaignMembersReports)
+
+}
+
+
+# old
+
+# getSalesforceReportsOLD <- function(){
+#   
+#   message('getting reports')
+#   campaignMembersReports <- getCampaignMembers(reportID_data$reportID, 'Report')
+#   campaignMembersReports <- cleanCampaignDF(campaignMembersReports)
+#   
+#   return(campaignMembersReports)
+#   
+# }
+
+
+# getSalesforceReports2 <- function(nameOfInterest){
+#   
+#   message('getting reports')
+#   campaignMembersReports <- getCampaignMembers2(nameOfInterest, 'Report') 
+#   campaignMembersReports <- cleanCampaignDF(campaignMembersReports)
+#   
+#   return(campaignMembersReports)
+#   
+# }
+
+##' get campaign member data for events (SF)
+##' 
+##' 
+##' 
+##' new, testing
+##' 
+##' 
+##' 
+
+ unlocking_finance <- eventID_data %>%
+   filter(eventID == "701Qk00000GiBszIAF")
+#   
+#   
+getSalesforceEventsTesting <- function(){
+  
+  message('getting events')
+  campaignMembersEvents <- data.frame()
+  
+  for (i in seq_along(unlocking_finance$eventID)) {
+    
+    # Get the reportID and corresponding campaignID
+    current_eventID <- unlocking_finance$eventID[i]
+    current_campaignID <- unlocking_finance$IDCampaignID[i]
+    message(sprintf('Processing eventID: %s, campaignID: %s', current_eventID, current_campaignID))
+    
+    
+    # Retrieve the campaign members for this specific reportID
+    campaignMembers <- getCampaignMembersEvents(current_eventID, 'Event')
+    print(head(campaignMembers))
+    
+    
+    # Add the reportID and campaignID as new columns
+    campaignMembers <- campaignMembers %>%
+      mutate(identifyingID = current_eventID, campaignID = current_campaignID)
+    
+    # Combine the results with previous iterations
+    campaignMembersEvents <- bind_rows(campaignMembersEvents, campaignMembers)
+  }
+  
+  message('Combined Campaign Members Events:')
+  print(head(campaignMembersEvents))
+  
+  eventID_map <- campaignMembersEvents %>%
+    filter(!is.na(identifyingID)) %>%
+    select(CampaignName, identifyingID, campaignID) %>%
+    distinct()
+  
+  message('Event ID Map:')
+  print(head(eventID_map))
+  
+  campaignMembersEvents <- campaignMembersEvents %>%
+    left_join(eventID_map, by = "CampaignName", suffix = c("", "_filled")) %>%
+    mutate(
+      identifyingID = coalesce(identifyingID, identifyingID_filled),
+      campaignID = coalesce(campaignID, campaignID_filled)
+    ) %>%
+    select(-identifyingID_filled, -campaignID_filled)
+  
+  message('Final Campaign Members Events after join:')
+  print(head(campaignMembersEvents))
+  
+  campaignMembersEvents <- cleanCampaignDF(campaignMembersEvents)
+  
+  return(campaignMembersEvents)
   
 }
 
-##' get campaign member data for events (SF)
+unlockingFinanceTesting <- getSalesforceEventsTesting()
+
+#campaignMembersEvents2 <- getSalesforceEventsTesting()
+
+
+
+
+#og
 getSalesforceEvents <- function(){
   
   message('getting events')
-  campaignMembersEvents <- getCampaignMembers(campaignEvents$eventID, 'Event')
+  campaignMembersEvents <- data.frame()
+  
+  for (i in seq_along(eventID_data$eventID)) {
+    
+    # Get the reportID and corresponding campaignID
+    current_eventID <- eventID_data$eventID[i]
+    current_campaignID <- eventID_data$IDCampaignID[i]
+    
+    # Retrieve the campaign members for this specific reportID
+    campaignMembers <- testingGetCampaignMembersEvents(current_eventID, 'Event')
+    
+    # Add the reportID and campaignID as new columns
+    campaignMembers <- campaignMembers %>%
+      mutate(identifyingID = current_eventID, campaignID = current_campaignID)
+    
+    message('Preview of campaign members:')
+    print(head(campaignMembers))
+    
+    # Combine the results with previous iterations
+    campaignMembersEvents <- bind_rows(campaignMembersEvents, campaignMembers)
+  }
+  
+  message('Combined data preview:')
+  print(head(campaignMembersEvents))
+  
+  eventID_map <- campaignMembersEvents %>%
+    filter(!is.na(identifyingID)) %>%
+    select(CampaignName, identifyingID, campaignID) %>%
+    distinct()
+  
+  campaignMembersEvents <- campaignMembersEvents %>%
+    left_join(eventID_map, by = "CampaignName", suffix = c("", "_filled")) %>%
+    mutate(
+      identifyingID = coalesce(identifyingID, identifyingID_filled),
+      campaignID = coalesce(campaignID, campaignID_filled)
+    ) %>%
+    select(-identifyingID_filled, -campaignID_filled)
+  
+  message('Final structure preview:')
+  print(str(campaignMembersEvents))
+  
+  
+  campaignMembersEvents <- cleanCampaignDF(campaignMembersEvents)
+  
+  return(campaignMembersEvents)
+  
+}
+
+# old version
+getSalesforceEventsOLD <- function(){
+  
+  message('getting events')
+  campaignMembersEvents <- getCampaignMembers(eventID_data$eventID, 'Event')
   campaignMembersEvents <- cleanCampaignDF(campaignMembersEvents)
   
   return(campaignMembersEvents)
@@ -1094,21 +2409,35 @@ getCampaignNewsletters <- function(){
   clicksByProspect <- select(linkClicks, c(emailId = list_email_id, Pardot_URL = prospect_id, url, created_at)) %>% 
     #' pardot call doesn't supply contact IDs or Account IDs so join using Pardot IDs embedded in Pardot URLs
     mutate(Pardot_URL = paste0("http://pi.pardot.com/prospect/read?id=", as.character(Pardot_URL)),
-           EngagementDate = as.Date(created_at, format="%Y-%m-%d")) %>% 
-    left_join(prospects, by = c('Pardot_URL')) %>% 
-    left_join(select(allEmailStats, c(emailId = id, CampaignName = name)), by = 'emailId') %>% 
+           EngagementDate = as.Date(created_at, format="%Y-%m-%d")) %>%
+    left_join(prospects, by = c('Pardot_URL'))%>% 
+    left_join(select(allEmailStats, c(emailId = id, CampaignName = name)), by = 'emailId')%>% 
     mutate(Status = 'Email',
            EngagementType = 'Newsletter') %>% 
-    mutate(Account = ifelse(grepl('unknown|not provided|contacts created', tolower(Account))|Account == '', 'Unknown', Account)) %>% 
+    mutate(Account = ifelse(grepl('unknown|not provided|contacts created', tolower(Account))|Account == '', 'Unknown', Account))%>% 
     #' left join all accounts using account name
     left_join(select(accountsUnique, c(AccountsName = Account, AccountDomain, Industry, AccountType, TotalGiving, 
                                        NumGifts, NumOpenOpps, AccountId2 = AccountId)), 
               by = c('Account' = 'AccountsName')) %>% 
+    #switched Domain to AccountDomain since Domain didn't exist
     select(CampaignName, EngagementType, Id, RecordType, Status, EngagementDate, Name, Email, Domain, Account, AccountType, Industry,
-           TotalGiving, NumOpenOpps, Pardot_Score, Pardot_URL, Giving_Circle, Last_Gift, AccountId)
+           TotalGiving, NumOpenOpps, Pardot_Score, Pardot_URL, Giving_Circle, Last_Gift, AccountId, 
+           Account_Constituent_Groups__c, Account_Constituent_Sub_Groups__c) %>%
+    mutate(identifyingID = NA) %>%
+    mutate(campaignID = NA)
   
   #' clean df and set audience groups
   campaignMembersEmail <- cleanCampaignDF(clicksByProspect)
+  
+  campaignNewsletters_unique <- campaignNewsletters %>%
+    select(name, campaignID) %>%
+    distinct()  # Remove any duplicate rows based on 'name' and 'campaignID'
+  
+  campaignMembersEmail <- campaignMembersEmail %>%
+    left_join(campaignNewsletters_unique, by = c("CampaignName" = "name")) %>%
+    mutate(campaignID = coalesce(campaignID.x, campaignID.y)) %>%
+    select(-campaignID.x, -campaignID.y)  # Remove the old campaignID columns after updating
+  
   
   return(campaignMembersEmail)
 }
@@ -1125,19 +2454,33 @@ getCampaignNewsletters <- function(){
 #' a factor of 0.0041 (1/244 days) for each additional day.
 #' If a donor engaged with multiple campaign components, the donation value is divided accordingly.
 
+# testing NEW
+
+#dfTiny <- df[7420:7470, ]
+
+  # for(i in 1:nrow(dfTiny)){
+  #   current_id <- trimws(dfTiny[i, 'Pardot_ID'])  # Trim whitespace
+  #   print(paste("Querying Pardot_ID:", current_id))
+  # 
+  #   visitorActivityCall <- GET(paste0('https://pi.pardot.com/api/opportunity/version/4/do/query?format=json&prospect_id=', current_id),
+  #                              add_headers(.headers = header4))
+  #   visitorActivity <- jsonlite::fromJSON(content(visitorActivityCall, as = "text", encoding = "UTF-8"))
+  #   print(visitorActivity)
 
 ##' get opportunities
-getOpportunities <- function(df){
+getOpportunities2 <- function(dfTiny){
   
   message('getting donations')
   allOpportunities <- data.frame(DonationID = '', DonationDate = '', DonationValue = '', Pardot_ID = '', EngagementDate = '',
                                  EngagementType = '', CampaignName = '', Pardot_Score = '',
                                  TotalGiving = '', DonorType = '')[0,]
-  for(i in 1:nrow(df)){
-    
-    visitorActivityCall <- GET(paste0('https://pi.pardot.com/api/opportunity/version/4/do/query?format=json&prospect_id=', df[i, 'Pardot_ID']),
+  for(i in 1:nrow(dfTiny)){
+    current_id <- trimws(dfTiny[i, 'Pardot_ID'])  # Trim whitespace
+    print(paste("Querying Pardot_ID:", current_id))
+    visitorActivityCall <- GET(paste0('https://pi.pardot.com/api/opportunity/version/4/do/query?format=json&prospect_id=', current_id),
                                add_headers(.headers = header4))
     visitorActivity <- jsonlite::fromJSON(content(visitorActivityCall, as = "text", encoding = "UTF-8"))
+    print(visitorActivity)
     tryCatch( { 
       if(visitorActivity[["result"]][["total_results"]] != 0){
         donationHistory <- data.frame(
@@ -1145,18 +2488,18 @@ getOpportunities <- function(df){
           DonationDate = visitorActivity[["result"]][["opportunity"]][["created_at"]],
           DonationValue = visitorActivity[["result"]][["opportunity"]][["value"]],
           DonationStatus = visitorActivity[["result"]][["opportunity"]][["status"]]
-          ) %>% 
+        ) %>% 
           filter(DonationStatus == 'Won') %>% 
-          cbind(df[i, 'EngagementDate']) %>% 
-          mutate(Pardot_ID = paste(df[i, 'Pardot_ID']),
-                 Id = paste(df[i, 'Id']),
+          cbind(dfTiny[i, 'EngagementDate']) %>% 
+          mutate(Pardot_ID = paste(dfTiny[i, 'Pardot_ID']),
+                 Id = paste(dfTiny[i, 'Id']),
                  DonationDate = as.Date(DonationDate, format = "%Y-%m-%d"),
                  EngagementDate = as.Date(EngagementDate, format="%Y-%m-%d"),
-                 EngagementType = paste(df[i, 'EngagementType']),
-                 CampaignName = paste(df[i, 'CampaignName']),
-                 Pardot_Score = paste(df[i, 'Pardot_Score']),
-                 TotalGiving = paste(df[i, 'TotalGiving']),
-                 DonorType = paste(df[i, 'DonorType'])) 
+                 EngagementType = paste(dfTiny[i, 'EngagementType']),
+                 CampaignName = paste(dfTiny[i, 'CampaignName']),
+                 Pardot_Score = paste(dfTiny[i, 'Pardot_Score']),
+                 TotalGiving = paste(dfTiny[i, 'TotalGiving']),
+                 DonorType = paste(dfTiny[i, 'DonorType'])) 
         allOpportunities <- allOpportunities %>% rbind(donationHistory)
       }
     }, error = function(e){ NA } )
@@ -1164,15 +2507,135 @@ getOpportunities <- function(df){
   }
   return(allOpportunities)
 }
+    
+
+#tinyTest <- getOpportunities2(dfTiny)
+
+
+# dfTiny <- df[7420:7470, ]
+# 
+# for(i in 1:nrow(dfTiny)){
+#   #used to be v4
+#   current_id <- dfTiny[i, 'Pardot_ID']
+#   print(paste("Querying Pardot_ID:", current_id))
+#   # current_id used to be df[i, 'Pardot_ID']
+#   visitorActivityCall <- GET(paste0('https://pi.pardot.com/api/opportunity/version/4/do/query?format=json&prospect_id=', current_id),
+#                              add_headers(.headers = header4))
+#   visitorActivity <- jsonlite::fromJSON(content(visitorActivityCall, as = "text", encoding = "UTF-8"))
+#   #new
+#   total_results <- visitorActivity[["result"]][["total_results"]]
+#   results_summary <- rbind(results_summary, data.frame(Pardot_ID = current_id, Total_Results = total_results))
+# }
+# print(results_summary)
+
+
+
+donationHistory <- data.frame(
+  DonationId = character(),
+  DonationDate = character(),
+  DonationValue = numeric(),
+  DonationStatus = character(),
+  stringsAsFactors = FALSE
+)
+
+##' get opportunities OLD
+getOpportunities <- function(dfDonors){
+  
+  message('getting donations')
+  #used to be DonationID
+  # allOpportunities <- data.frame(DonationId = '', DonationDate = '', DonationValue = '', Pardot_ID = '', EngagementDate = '',
+  #                                EngagementType = '', CampaignName = '', Pardot_Score = '',
+  #                                TotalGiving = '', DonorType = '')[0,]
+  allOpportunities <- data.frame(
+    DonationId = character(),
+    DonationDate = as.Date(character()),
+    DonationValue = numeric(),
+    Pardot_ID = character(),
+    EngagementDate = as.Date(character()),
+    EngagementType = character(),
+    CampaignName = character(),
+    Pardot_Score = numeric(),
+    TotalGiving = numeric(),
+    DonorType = character(),
+    stringsAsFactors = FALSE
+  )
+   
+  for(i in 1:nrow(dfDonors)){
+    #used to be v4
+    current_id <- dfDonors[i, 'Pardot_ID']
+    print(paste("Querying Pardot_ID:", current_id))
+    # current_id used to be df[i, 'Pardot_ID']
+    visitorActivityCall <- GET(paste0('https://pi.pardot.com/api/opportunity/version/4/do/query?format=json&prospect_id=', current_id),
+                               add_headers(.headers = header4))
+    visitorActivity <- jsonlite::fromJSON(content(visitorActivityCall, as = "text", encoding = "UTF-8"))
+    print(visitorActivity)
+   
+    if(status_code(visitorActivityCall) == 200){
+      visitorActivity <- jsonlite::fromJSON(content(visitorActivityCall, as = "text", encoding = "UTF-8"))
+      
+     tryCatch( { 
+      if(visitorActivity[["result"]][["total_results"]] != 0){
+        
+        donationHistory <- data.frame(
+          DonationId = visitorActivity[["result"]][["opportunity"]][["id"]],
+          DonationDate = visitorActivity[["result"]][["opportunity"]][["created_at"]],
+          DonationValue = as.numeric(visitorActivity[["result"]][["opportunity"]][["value"]]),
+          DonationStatus = visitorActivity[["result"]][["opportunity"]][["status"]],
+          stringsAsFactors = FALSE
+          ) %>% 
+          filter(DonationStatus == 'Won') %>% 
+          cbind(EngagementDate = dfDonors[i, 'EngagementDate']) %>% 
+          mutate(Pardot_ID = as.character(dfDonors[i, 'Pardot_ID']),
+                 Id = as.character(dfDonors[i, 'Id']),
+                 DonationDate = as.Date(DonationDate, format = "%Y-%m-%d"),
+                 EngagementDate = as.Date(EngagementDate, format="%Y-%m-%d"),
+                 EngagementType = as.character(dfDonors[i, 'EngagementType']),
+                 CampaignName = as.character(dfDonors[i, 'CampaignName']),
+                 Pardot_Score = as.numeric(dfDonors[i, 'Pardot_Score']),
+                 TotalGiving = as.numeric(dfDonors[i, 'TotalGiving']),
+                 DonorType = as.character(dfDonors[i, 'DonorType'])) 
+        
+        allOpportunities <- rbind(allOpportunities, donationHistory)
+      }
+    }
+    , error = function(e){        
+      print(paste("Error processing Pardot_ID:", current_id, "Error message:", e))
+} )
+    } else {
+      print(paste("API request failed for Pardot_ID:", current_id))
+      
+    }
+    
+  }
+  return(allOpportunities)
+}
+
+
+# test_id <- df[7380, 'Pardot_ID']  # Replace this with a known valid Pardot_ID
+# visitorActivityCall <- GET(paste0('https://pi.pardot.com/api/opportunity/version/4/do/query?format=json&prospect_id=', test_id),
+#                            add_headers(.headers = header4))
+# visitorActivity <- jsonlite::fromJSON(content(visitorActivityCall, as = "text", encoding = "UTF-8"))
+# print(visitorActivity)
+# #head(df$Pardot_ID)
+
+#print(test_id)
+
+# if(visitorActivity[["result"]][["total_results"]] != 0) {
+#   opportunities <- visitorActivity[["result"]][["opportunity"]]
+#   print(opportunities)  # Print the opportunities if they exist
+# } else {
+#   print("No opportunities found for this prospect ID.")
+# }
+# 
 
 #' calculate attributed donation value
 getAttributedDonationValue <- function(df){
   
   if(nrow(df) > 0){
     
-    #' get all donors in this campaign
+    #' get all donors in this campaign; add campaignID
     donors <- df %>% 
-      select(Pardot_ID, Name, DonorType, EngagementType, CampaignName, EngagementDate, Id, Pardot_Score, TotalGiving, Account) %>% 
+      select(Pardot_ID, CampaignName, DonorType, EngagementType, CampaignName, EngagementDate, Id, Pardot_Score, TotalGiving, Account) %>% 
       distinct() %>% 
       filter(!is.na(DonorType))
     
@@ -1219,6 +2682,15 @@ getMetadata <- function(url) {
   return(jsonlite::fromJSON(content(request, as = "text", encoding = "UTF-8")))
 }
 
+
+#sproutHeader <- c(Authorization = paste("Bearer", access_token))
+
+# Function to get metadata for customer tags
+
+
+# end
+
+
 #' call for all other requests
 getCall <- function(url, args) {
   request <- POST(url = paste0('https://api.sproutsocial.com/v1/805215/', url),
@@ -1228,7 +2700,10 @@ getCall <- function(url, args) {
   return(jsonlite::fromJSON(content(request, as = "text", encoding = "UTF-8")))
 }
 
-#' post analytics request
+#response <- GET(url, add_headers(Authorization = paste("Bearer", access_token)))
+
+
+#' post analytics request - likely where we'll add new topic-level data
 sproutPostRequest <- function(page, dateRange, profileIDs, tagged = TRUE){
   
   #' set tagged == FALSE when making call to get all posts (returns distinct posts rather than duplicate posts if a post has multiple tags)
@@ -1239,7 +2714,7 @@ sproutPostRequest <- function(page, dateRange, profileIDs, tagged = TRUE){
       "perma_link",
       "text",
       "internal.tags.id",
-      "post_type")
+      "post_type") # added tags
   } else {
     #' remove internal.tags.id field if tagged == FALSE
     fields <- c(
@@ -1286,31 +2761,96 @@ sproutPostRequest <- function(page, dateRange, profileIDs, tagged = TRUE){
   return(postStats)
 }
 
+
+# exploreAPIResponse <- function(page, dateRange, profileIDs) {
+#   
+#   # Define arguments for the API call
+#   args <- list(
+#     "filters" = c(paste0("customer_profile_id.eq", profileIDs), dateRange),
+#     "metrics" = c("lifetime.impressions", "lifetime.engagements", "lifetime.post_content_clicks", "lifetime.shares_count"), 
+#     "timezone" = "America/Denver",
+#     "page" = paste(page)
+#   )
+#   
+#   # Make the API call
+#   getStats <- getCall(url = 'analytics/posts', args = args)
+#   
+#   if (!is.null(getStats[["data"]])) {
+#     str(getStats[["data"]])
+#     
+#     print(getStats[["data"]])
+#   } else {
+#     print("No data returned from API.")
+#   }
+# }
+# 
+# postStats <- exploreAPIResponse(i, 
+#                                dateRange = paste0("created_time.in(", '2023-01-01', "T00:00:00..", currentDate, "T23:59:59)"),
+#                                profileIDs = '(3244287, 2528134, 2528107, 2528104, 3354378, 4145669, 4400432, 4613890, 5083459, 5097954, 5098045, 5251820, 5334423, 5403312, 3246632, 5403593, 5403597)') 
+# 
+
+
+
+#' get all social media posts with tags
+#' getAllSocialPosts <- function(){
+#'   
+#'   #' create data frame to store all posts
+#'   allPostsTags <- data.frame(created_time = '', post_type = '', text = '', perma_link = '', 
+#'                              lifetime.impressions = '', lifetime.post_content_clicks = '', 
+#'                              lifetime.engagements = '', lifetime.shares_count = '', id = '')[0, ]
+#'   
+#'   #' get all posts from social channels dating back to Jan 1, 2023
+#'   #' note: 300 was chosen as an arbitrary ceiling. the call will end well before this point is reached.
+#'   for(i in 1:300){
+#'     postStats <- sproutPostRequest(i, 
+#'                                    dateRange = paste0("created_time.in(", '2023-01-01', "T00:00:00..", currentDate, "T23:59:59)"),
+#'                                    profileIDs = '(3244287, 2528134, 2528107, 2528104, 3354378, 4145669, 4400432, 4613890, 5083459, 5097954, 5098045, 5251820, 5334423, 5403312, 3246632, 5403593, 5403597)') 
+#'     #' break loop if NULL value is returned (indicates last page reached)
+#'     if(is.null(postStats)){ break }
+#'     
+#'     #' unnest tags
+#'     postStats <- postStats %>% unnest(tags)
+#'     #' bind query to data frame
+#'     allPostsTags <- allPostsTags %>% rbind(postStats)
+#'   }
+#'   
+#'   return(allPostsTags)
+#' }
+
+#updated to solve profileIDs issue
 #' get all social media posts with tags
 getAllSocialPosts <- function(){
-  
   #' create data frame to store all posts
   allPostsTags <- data.frame(created_time = '', post_type = '', text = '', perma_link = '', 
                              lifetime.impressions = '', lifetime.post_content_clicks = '', 
                              lifetime.engagements = '', lifetime.shares_count = '', id = '')[0, ]
+  # get current customer profile IDs
+  metadeta <- getMetadata(url = 'metadata/customer')
+  customers <- metadeta[["data"]]
   
+  # filter customers to where network type does not include linkedin
+  profileIDs = customers %>%
+    filter(!str_detect(network_type, 'linkedin'))
+  
+  profileIDs <- profileIDs$customer_profile_id
+  profileIDs <- paste0('(', paste0(profileIDs, collapse = ', '), ')')
   #' get all posts from social channels dating back to Jan 1, 2023
   #' note: 300 was chosen as an arbitrary ceiling. the call will end well before this point is reached.
   for(i in 1:300){
     postStats <- sproutPostRequest(i, 
                                    dateRange = paste0("created_time.in(", '2023-01-01', "T00:00:00..", currentDate, "T23:59:59)"),
-                                   profileIDs = '(3244287, 2528134, 2528107, 2528104, 3354378, 4145669, 4400432, 4613890, 5083459, 5097954, 5098045, 5251820, 5334423, 5403312, 3246632, 5403593, 5403597)') 
+                                   profileIDs = profileIDs)
+    
     #' break loop if NULL value is returned (indicates last page reached)
     if(is.null(postStats)){ break }
-    
     #' unnest tags
     postStats <- postStats %>% unnest(tags)
     #' bind query to data frame
     allPostsTags <- allPostsTags %>% rbind(postStats)
   }
-  
   return(allPostsTags)
 }
+
 
 #' clean response
 cleanPostDF <- function(df, type, linkedin = 'FALSE'){
@@ -1323,6 +2863,11 @@ cleanPostDF <- function(df, type, linkedin = 'FALSE'){
            across(lifetime.impressions:engagementRate, ~ as.numeric(.x))) %>% 
     filter(!is.na(lifetime.impressions)) 
   
+  # if (nrow(posts) == 0) {
+  #   warning("No posts available after filtering. Returning an empty dataframe.")
+  #   return(posts)
+  # }
+  # 
   for(i in 1:nrow(posts)){
     
     #' rename post types
@@ -1508,32 +3053,75 @@ getLIProgramPosts <- function(type){
 }
 
 #' get post metrics (AVGs) based on all posts made over the last year
+#' getPostAverages <- function(){
+#'   
+#'   posts1YR <- data.frame(created_time = '', post_type = '', text = '', perma_link = '',
+#'                          lifetime.impressions = '', lifetime.post_content_clicks = '',
+#'                          lifetime.engagements = '', lifetime.shares_count = '')[0, ]
+#'   
+#'   #' get all posts from social channels made over the past year
+#'   for(i in 1:300){
+#'     postStats <- sproutPostRequest(i, 
+#'                                    dateRange = paste0("created_time.in(", sixMonthsAgo, "T00:00:00..", currentDate, "T23:59:59)"),
+#'                                    profileIDs = '(3244287, 2528134, 2528107, 2528104, 3354378, 4145669, 4400432, 4613890, 5083459, 5097954, 5098045, 5251820, 5334423, 5403312, 3246632, 5403593, 5403597)',
+#'                                    tagged = FALSE)
+#'     if(is.null(postStats)){ break }
+#'     
+#'     posts1YR <- posts1YR %>% rbind(postStats)
+#'   }
+#'   
+#'   linkedInAll <- getLIProgramPosts('all')
+#'   
+#'   allPosts1YR <- cleanPostDF(posts1YR, 'all') %>%
+#'     rbind(linkedInAll) %>% 
+#'     #' filter out reposts
+#'     filter(impressions > 0,
+#'            !grepl('ugcPost', perma_link),
+#'            account != '')
+#'   
+#'   posts1YRaverages <- allPosts1YR %>%
+#'     group_by(post_type, account) %>%
+#'     summarize(
+#'       numPosts = n(),
+#'       impressionsMedian = round(median(impressions, na.rm = TRUE), 1),
+#'       impressionsMean = round(mean(impressions, na.rm = TRUE), 1),
+#'       engagementsMedian = round(median(engagements), 1),
+#'       engagementsMean = round(mean(engagements), 1),
+#'       engrtMedian = round(median(engagementRate), 3),
+#'       engrtMean = round(mean(engagementRate), 3)
+#'     ) 
+#'   
+#'   return(posts1YRaverages)
+#' }
+
+#' new version, solving for profileID
+#' 
 getPostAverages <- function(){
-  
   posts1YR <- data.frame(created_time = '', post_type = '', text = '', perma_link = '',
                          lifetime.impressions = '', lifetime.post_content_clicks = '',
                          lifetime.engagements = '', lifetime.shares_count = '')[0, ]
+  # get current customer profile IDs
+  metadeta <- getMetadata(url = 'metadata/customer')
+  customers <- metadeta[["data"]]
   
+  profileIDs <- customers$customer_profile_id
+  profileIDs <- paste0('(', paste0(profileIDs, collapse = ', '), ')')
   #' get all posts from social channels made over the past year
   for(i in 1:300){
     postStats <- sproutPostRequest(i, 
                                    dateRange = paste0("created_time.in(", sixMonthsAgo, "T00:00:00..", currentDate, "T23:59:59)"),
-                                   profileIDs = '(3244287, 2528134, 2528107, 2528104, 3354378, 4145669, 4400432, 4613890, 5083459, 5097954, 5098045, 5251820, 5334423, 5403312, 3246632, 5403593, 5403597)',
+                                   profileIDs = profileIDs,
                                    tagged = FALSE)
     if(is.null(postStats)){ break }
-    
     posts1YR <- posts1YR %>% rbind(postStats)
   }
-  
   linkedInAll <- getLIProgramPosts('all')
-  
   allPosts1YR <- cleanPostDF(posts1YR, 'all') %>%
     rbind(linkedInAll) %>% 
     #' filter out reposts
     filter(impressions > 0,
            !grepl('ugcPost', perma_link),
            account != '')
-  
   posts1YRaverages <- allPosts1YR %>%
     group_by(post_type, account) %>%
     summarize(
@@ -1545,7 +3133,6 @@ getPostAverages <- function(){
       engrtMedian = round(median(engagementRate), 3),
       engrtMean = round(mean(engagementRate), 3)
     ) 
-  
   return(posts1YRaverages)
 }
 

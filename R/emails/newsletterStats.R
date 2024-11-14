@@ -117,7 +117,7 @@ for(i in 1:30){
 # filter through list to find correct emails
 allSparkNLs <- allNLs %>% 
   filter(grepl('Spark', name) | grepl('Upcoming Events', name) | grepl('PEM', name) |
-           grepl('Climate Resilience Update', name)) %>%
+           grepl('Climate Resilience Update', name) | grepl('Scandinavia House', name) | grepl('Guide to Climate Week', name)) %>%
   filter(!grepl('Proof', subject) & !grepl('v2', name)) %>% 
   select(id, name, subject, sentAt) %>% 
   mutate(totalClicks = '')
@@ -137,6 +137,19 @@ marketCatalystNLs <- getTotalClicks(allMCNLs) %>%
   filter(totalClicks != '' & totalClicks > 0) %>% 
   mutate(date = as.Date(paste0(str_extract(name, '[0-9]+-[0-9]+'), '-01'), "%Y-%m-%d")) %>% 
   filter(date >= '2023-06-01') 
+
+#new
+allScandiHouse <- allNLs %>%
+  filter(grepl('Scandinavia House', name)) %>%
+  filter(!grepl('Proof', subject) & !grepl('v2', name)) %>% 
+  select(id, name, subject, sentAt) %>% 
+  mutate(totalClicks = '')
+
+ScandiHouseNLs <- getTotalClicks(allScandiHouse) %>% 
+  filter(totalClicks != '' & totalClicks > 0) %>%
+  mutate(date = as.Date(paste0(str_extract(name, '[0-9]+-[0-9]+'), '-01'), "%Y-%m-%d")) 
+  
+  
 
 ## get individual link clicks for each newsletter
 getBatchClicks <- function(emailId, df){
@@ -314,9 +327,10 @@ sparkNLs <- sparkNLs %>%
 allSpark <- getLinkClicks(newsletter = sparkNLs) %>%
   filter(!is.na(email))
 
-
 allMC <- getLinkClicks(newsletter = marketCatalystNLs) 
 
+#new - is not working
+allSH <- getLinkClicks(newsletter = ScandiHouseNLs) 
 
 
 ### get email stats
