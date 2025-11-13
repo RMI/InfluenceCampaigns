@@ -1,0 +1,5 @@
+requests
+zeep
+python-dotenv
+pandas
+datetime
