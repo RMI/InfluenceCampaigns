@@ -781,6 +781,24 @@ tDate', 'Domain',
 
 }
 
+# Making data type compatible during merge with old data
+
+tf_cols <- c(
+  "GivingCircleTF", "SolutionsCouncilTF", "InnovatorsCircleTF", "OpenOppTF",
+  "DonorTF", "LapsedDonorsTF", "DownloadTF", "EventTF", "EmailClickTF", "Engagements"
+)
+
+SFcampaigns[tf_cols] <- lapply(SFcampaigns[tf_cols], function(x) {
+  # convert everything to character first
+  x <- as.character(x)
+  
+  # Replace "NULL" and "" with proper NA
+  x[x %in% c("NULL", "null", "", "NA", "N/A")] <- NA
+  
+  # Convert back to numeric 0/1
+  as.numeric(x)
+})
+
 #manual
 SFcampaigns <- SFcampaigns %>%
   mutate(CampaignName = if_else(CampaignName == "n Equitable Energy Transition", 
