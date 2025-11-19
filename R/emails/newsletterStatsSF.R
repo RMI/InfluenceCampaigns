@@ -12,7 +12,7 @@ library(purrr)
 
 #setwd('C:\\Users\\elizabeth.duchan\\Document\\GitHub\\InfluenceCampaigns\\R\\powerBI')
 
-setwd("~/GitHub/InfluenceCampaigns/R/powerBI")
+setwd("~/GitHub/InfluenceCampaignsNew/InfluenceCampaigns/R/powerBI")
 
 load_dot_env('Renviron.env')
 

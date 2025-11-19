@@ -1,5 +1,7 @@
 
-setwd("~/GitHub/InfluenceCampaigns/R/powerBI")
+#setwd("~/GitHub/InfluenceCampaigns/R/powerBI")
+setwd("~/GitHub/InfluenceCampaignsNew/InfluenceCampaigns/R/powerBI")
+
 ### get packages and functions
 source("packages.R")  
 source("functions.R") 
@@ -773,13 +775,15 @@ tDate', 'Domain',
            AccountId, Account, AccountType, Audience1, Audience2, Industry, constituent_group_1, constituent_group_2,
            constituent_group_3, constituent_group_4, constituent_subgroup_1, constituent_subgroup_2, constituent_subgroup_3, 
            constituent_subgroup_4, Pardot_URL, Pardot_ID, GivingCircleTF, SolutionsCouncilTF, InnovatorsCircleTF, OpenOppTF,
-           DonorTF, LapsedDonorsTF, DownloadTF, EventTF, EmailClickTF, Engagements, Group_Name, Parent_Group, Type, campaignID)
+           DonorTF, LapsedDonorsTF, DownloadTF, EventTF, EmailClickTF, Engagements, Group_Name = Group_Name__c, 
+           Parent_Group = Parent_Group__c, Type, campaignID)
   
   SFcampaigns <- SFcampaigns %>%
     rbind(campaignNewslettersPardot)
   
 
 }
+
 
 # Making data type compatible during merge with old data
 
@@ -931,6 +935,7 @@ campaignPosts <- campaignPosts %>%
 # RUN THIS
 write.csv(campaignPosts, "campaignPostsExportCampaign.csv", row.names = FALSE)
 
+campaignPosts <- read.csv("campaignPostsExportCampaign.csv")
 
 
 ####' Monday.com ####
@@ -1358,6 +1363,7 @@ for (i in tables) {
   })
 }
 
+dbSendQuery(con, "DELETE FROM sfcampaigns;")
 
 #for sf campaigns
 #for (i in tables){

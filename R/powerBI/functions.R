@@ -4775,7 +4775,7 @@ getSalesforceEvents_single <- function(test_eventID, test_campaignID) {
   return(campaignMembersEvents)
 }
 
-df_test <- getSalesforceEvents_single("701Qk00000Ka1dJIAR", "cop29")
+#df_test <- getSalesforceEvents_single("701Qk00000Ka1dJIAR", "cop29")
 
 
 
