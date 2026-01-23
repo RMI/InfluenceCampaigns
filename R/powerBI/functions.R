@@ -548,6 +548,8 @@ scrape_pagetitle <- function(url) {
       trimws()
     
     cleaned_title <- sub(" - RMI$", "", page_title)
+    # prevent memory leak
+    closeAllConnections()
     
     return(cleaned_title)
 }
