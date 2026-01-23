@@ -331,6 +331,9 @@ scrape_campaigntag <- function(url) {
     html_nodes('script[type="application/ld+json"]') %>%
     html_text() 
   
+  # close connection to prevent leak
+  closeAllConnections()
+  
   #initialize campaign tag var  
   campaign_tags <- c("cop28", "2023-2025_coalvgas", "oci+", "nycw24", "transition-narrative", 
                      "cop29", "fapp24", "cera25", "sapp25", "nycw25") # add to or change
@@ -372,7 +375,8 @@ url3 <- "https://rmi.org/rmi-at-cop28/"
 url4 <- "https://rmi.org/reality-check-natural-gas-true-climate-risk/"
 url5 <- "https://rmi.org/insight/toward-a-shared-zero-carbon-energy-future/"
 campaign_tag <- scrape_campaigntag(url5)
-print(campaign_tag)
+eprint(campaign_tag)
+
 
 #test_url <- "https://rmi.org/people/nicole-leonard/" # A URL path from GA4
 
