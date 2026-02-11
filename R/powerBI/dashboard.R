@@ -30,22 +30,6 @@ con <- dbConnect(
       )
 
 
-
-# a <- dbListTables(con)
-# 
-# b <- as.character("allTraffic" , "campaignNewsletters" ,"campaignPosts"  ,  "contentSummary" ,   "donations", 
-#           "geographyTraffic"  ,  "mediaReferrals"  ,    "SFcampaigns"   ,      "socialTraffic"    ,   "targetCampaign")
-# 
-# 
-# readxl::excel_sheets('OCI+ Dashboard Dataset.xlsx')
-# 
-# for(i in readxl::excel_sheets('OCI+ Dashboard Dataset.xlsx')){
-#   df <- read.xlsx('OCI+ Dashboard Dataset.xlsx', sheet = i, detectDates = TRUE)
-#   dbWriteTable(con, i, df, append = TRUE)
-# 
-# }
-
-
 ### SET CAMPAIGN
 
 #' Monday.com Token
@@ -86,11 +70,20 @@ campaign_tags <- c("cop28", "2023-2025_coalvgas", "oci+", "nycw24",
                    "transition-narrative", "cop29", "fapp24", "cera25", "sapp25", "nycw25")
 
 # Call the main function to get filtered URLs with campaign tags; now using optimized new function
-filtered_urls <- data.frame(pagePath = character(),
-                            campaign_tag = character(),
-                            stringsAsFactors = FALSE)
-filtered_urls <- getWebsiteURLs2(propertyID = rmiPropertyID, campaign_tags = campaign_tags)
+# filtered_urls <- data.frame(pagePath = character(),
+#                             campaign_tag = character(),
+#                             stringsAsFactors = FALSE)
+# filtered_urls <- getWebsiteURLs2(propertyID = rmiPropertyID, campaign_tags = campaign_tags)
 
+
+start <- Sys.time()
+
+result <- getWebsiteURLsV3(rmiPropertyID,campaign_tags,
+                           date_range = dateRangeGA,
+                           view_threshold = 50, progress_every = 50,
+                           debug = FALSE)
+
+end <- Sys.time()
 
 # Process the filtered URLs: add page titles and types
 campaign_urls <- filtered_urls %>%
