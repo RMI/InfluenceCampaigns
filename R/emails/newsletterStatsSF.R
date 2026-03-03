@@ -71,7 +71,8 @@ allSFEmailClicks <- SF_getTotalClicks()
 
 allSparkSF <- allSFEmailClicks %>%
   filter(grepl('Spark', name) | grepl('Upcoming Events', name) | grepl('PEM', name) |
-           grepl('Climate Resilience Update', name) | grepl('Scandinavia House', name) | grepl('Guide to Climate Week', name)) %>%
+           grepl('Climate Resilience Update', name) | grepl('Scandinavia House', name) | 
+           grepl('Fall Appeal', name) | grepl('Guide to Climate Week', name)) %>%
   filter(!grepl('Proof', subject) & !grepl('v2', name)) %>% 
   filter(totalClicks != '' & totalClicks > 0) %>% 
   filter(!grepl('Fred', name)) %>% 
@@ -276,7 +277,7 @@ allSparkEmailStatsSF <- getSFEmailStats(allSparkSF)
 install.packages("furrr")
 library(furrr)
 
-getSFSparkStats <- function(emailStatsDF = allSparkEmailStatsSF, emailClicksDF = allSpark_SF){
+getSFSparkStatsOLD <- function(emailStatsDF = allSparkEmailStatsSF, emailClicksDF = allSpark_SF){
   
   CTR_mean <- (sum(emailStatsDF$unique_CTR)/length(emailStatsDF$unique_CTR))
   openRT_mean <- (sum(emailStatsDF$open_rate)/length(emailStatsDF$open_rate))
@@ -344,6 +345,115 @@ getSFSparkStats <- function(emailStatsDF = allSparkEmailStatsSF, emailClicksDF =
 #allSparkStats <- getSparkStats()
 
 #  write.csv(allSparkStats, 'allSparkStats.csv')
+
+getSFSparkStats <- function(
+    emailStatsDF = allSparkEmailStatsSF,
+    emailClicksDF = allSpark_SF
+) {
+  
+  CTR_mean    <- mean(emailStatsDF$unique_CTR, na.rm = TRUE)
+  openRT_mean <- mean(emailStatsDF$open_rate, na.rm = TRUE)
+  
+  stats <- emailStatsDF %>%
+    mutate(
+      UCTRvsAvg = 10 * (unique_CTR - CTR_mean),
+      ORvsAvg   = open_rate - openRT_mean
+    ) %>%
+    mutate(across(
+      c(open_rate, unique_CTR, UCTRvsAvg, ORvsAvg),
+      ~ round(.x, 3)
+    )) %>%
+    relocate(UCTRvsAvg, .after = unique_CTR) %>%
+    relocate(ORvsAvg, .after = open_rate) %>%
+    
+    left_join(emailClicksDF, by = "name") %>%
+    select(-ends_with(".y")) %>%
+    rename_with(~ str_remove(.x, "\\.x$")) %>%
+    
+    mutate(
+      # extract any date-like fragment
+      date_raw = str_extract(
+        name,
+        "[0-9]{2,4}[-_][0-9]{2}[-_][0-9]{2,4}"
+      ),
+      
+      # normalize date
+      date = case_when(
+        # Spark_MM_DD_YYYY
+        str_detect(name, "^Spark_[0-9]{2}_[0-9]{2}_[0-9]{4}$") ~
+          as.Date(
+            str_replace(
+              name,
+              "^Spark_([0-9]{2})_([0-9]{2})_([0-9]{4}).*$",
+              "\\3-\\1-\\2"
+            )
+          ),
+        
+        # Spark_MM_DD_YY → assume 20YY
+        str_detect(name, "^Spark_[0-9]{2}_[0-9]{2}_[0-9]{2}$") ~
+          as.Date(
+            str_replace(
+              name,
+              "^Spark_([0-9]{2})_([0-9]{2})_([0-9]{2}).*$",
+              "20\\3-\\1-\\2"
+            )
+          ),
+        
+        # everything else already YYYY-MM-DD or YYYY_MM_DD
+        TRUE ~ as.Date(gsub("_", "-", date_raw))
+      ),
+      
+      # normalize all known Spark/date formats
+      name = case_when(
+        # Spark YYYY-MM-DD
+        str_detect(name, "^Spark [0-9]{4}-[0-9]{2}-[0-9]{2}$") ~
+          paste(format(date, "%Y-%m-%d"), "Spark"),
+        
+        # Spark YYYY_MM_DD
+        str_detect(name, "^Spark [0-9]{4}_[0-9]{2}_[0-9]{2}$") ~
+          paste(format(date, "%Y-%m-%d"), "Spark"),
+        
+        # Spark_YYYY_MM_DD
+        str_detect(name, "^Spark_[0-9]{4}_[0-9]{2}_[0-9]{2}$") ~
+          paste(format(date, "%Y-%m-%d"), "Spark"),
+        
+        # Spark_MM_DD_YYYY
+        str_detect(name, "^Spark_[0-9]{2}_[0-9]{2}_[0-9]{4}$") ~
+          paste(format(date, "%Y-%m-%d"), "Spark"),
+        
+        # Spark_MM_DD_YY
+        str_detect(name, "^Spark_[0-9]{2}_[0-9]{2}_[0-9]{2}$") ~
+          paste(format(date, "%Y-%m-%d"), "Spark"),
+        
+        # YYYY_MM_DD <text>
+        str_detect(name, "^[0-9]{4}_[0-9]{2}_[0-9]{2}") ~
+          str_replace(
+            name,
+            "^([0-9]{4})_([0-9]{2})_([0-9]{2})",
+            "\\1-\\2-\\3"
+          ),
+        
+        TRUE ~ name
+      ),
+      
+      # strip trailing tracking IDs (e.g., " - 20251017_122934 ...") from Upcoming Events
+      name = str_remove(
+        name,
+        "\\s-\\s[0-9]{8}_[0-9]{6}.*$"
+      )
+    ) %>%
+    select(-date_raw) %>%
+    
+    arrange(desc(date))
+  
+  return(stats)
+}
+
+
+
+install.packages("furrr")
+library(furrr)
+plan(multisession, workers = 6)
 
 allSparkStats <- getSFSparkStats() 
 

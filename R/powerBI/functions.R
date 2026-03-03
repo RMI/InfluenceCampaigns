@@ -333,7 +333,7 @@ scrape_campaigntag <- function(url) {
   
   #initialize campaign tag var  
   campaign_tags <- c("cop28", "2023-2025_coalvgas", "oci+", "nycw24", "transition-narrative", 
-                     "cop29", "fapp24", "cera25", "sapp25", "nycw25") # add to or change
+                     "cop29", "fapp24", "cera25", "sapp25", "nycw25", "fapp25", "cop30") # add to or change
   campaign_tag <- NULL #initializing
 
   #loops through each element, parsing json string
@@ -527,7 +527,8 @@ getWebsiteURLs2 <- function(propertyID, campaign_tags, date_range = dateRangeGA,
 
 #getWebsiteURLs(propertyID = rmiPropertyID, campaign_tags = campaign_tags)
 rmiPropertyID <- 354053620
-campaign_tags <- c("cop28", "2023-2025_coalvgas", "oci+", "nycw24", "transition-narrative", "cop29", "fapp24", "cera25", "sapp25", "nycw25")
+campaign_tags <- c("cop28", "2023-2025_coalvgas", "oci+", "nycw24", "transition-narrative", "cop29", "fapp24", 
+                   "cera25", "sapp25", "nycw25", "fapp25", "cop30")
 
 # Call the function with the correct arguments
 #filtered_urls <- getWebsiteURLs(propertyID = rmiPropertyID, campaign_tags = campaign_tags)
@@ -1106,6 +1107,8 @@ getPageMetrics3 <- function(propertyID, pageAndTag) {
   
   # Define campaign-specific date ranges
   customDateRanges <- list(
+    cop30 = c("2025-11-10", "2025-12-15"),
+    fapp25 = c("2025-11-03", "2025-12-31"),
     sapp25 = c("2025-03-30", "2025-06-30"),
     fapp24 = c("2024-11-01", "2025-02-10"),
     nycw24 = c("2024-09-01", "2024-10-05"),
@@ -1311,6 +1314,8 @@ getTrafficSocialWithTags <- function(propertyID, pageAndTag, site = 'rmi.org') {
   
   # Define custom date ranges per campaign tag
   customDateRanges <- list(
+    cop30 = c("2025-11-10", "2025-12-15"),
+    fapp25 = c("2025-11-03", "2025-12-31"),
     sapp25 = c("2025-03-30", "2025-06-30"),
     fapp24 = c("2024-11-01", "2025-02-10"),
     nycw24 = c("2024-09-01", "2024-10-05"),
@@ -1523,6 +1528,8 @@ getTrafficGeographyWithTags <- function(propertyID, pageAndTag, site = 'rmi.org'
   
   # Define custom campaign-specific date ranges
   customDateRanges <- list(
+    cop30 = c("2025-11-10", "2025-12-15"),
+    fapp25 = c("2025-11-03", "2025-12-31"),
     sapp25 = c("2025-03-30", "2025-06-30"),
     fapp24 = c("2024-11-01", "2025-02-10"),
     nycw24 = c("2024-09-01", "2024-10-05"),
@@ -1716,6 +1723,7 @@ getAcquisitionWithTags <- function(propertyID, pageAndTag, site = 'rmi.org') {
   
   # Define campaign-specific date ranges
   customDateRanges <- list(
+    fapp25 = c("2025-11-03", "2025-12-31"),
     sapp25 = c("2025-03-30", "2025-06-30"),
     fapp24 = c("2024-11-01", "2025-02-10")
   )
@@ -1834,6 +1842,8 @@ getAcquisitionWithTags2 <- function(propertyID, pageAndTag, site = 'rmi.org') {
   
   # Define campaign-specific date ranges
   customDateRanges <- list(
+    cop30 = c("2025-11-10", "2025-12-15"),
+    fapp25 = c("2025-11-03", "2025-12-31"),
     sapp25 = c("2025-03-30", "2025-06-30"),
     fapp24 = c("2024-11-01", "2025-02-10"),
     nycw24 = c("2024-09-01", "2024-10-05"),
@@ -2065,6 +2075,8 @@ getReferralsWithTag <- function(propertyID, pageAndTag, site = 'rmi.org') {
   
   # Define campaign-specific date ranges
   customDateRanges <- list(
+    cop30 = c("2025-11-10", "2025-12-15"),
+    fapp25 = c("2025-11-03", "2025-12-31"),
     sapp25 = c("2025-03-30", "2025-06-30"),
     fapp24 = c("2024-11-01", "2025-02-10"),
     nycw24 = c("2024-09-01", "2024-10-05"),
@@ -2304,10 +2316,14 @@ getAllEmailStats <- function(){
   #' bind - would need to bind scandinavia house emails here
   allEmailStats <- emailStatsSpark %>% 
     plyr::rbind.fill(emailStatsPEM) %>% 
-    mutate(date = as.Date(date),
-           #' change name format
-           name = ifelse(grepl('Spark', name), paste0(date, ': Spark'), paste0(date, ':', sub('(.*)-[0-9]{2}', '', name))))
-        #   id = as.numeric(id))
+    mutate(
+      date = as.Date(date),
+      name = case_when(
+        str_starts(name, "Fall Appeal") ~ name,                     # leave exactly as-is
+        str_detect(name, "Spark") ~ paste0(date, ": Spark"),         # Spark logic
+        TRUE ~ paste0(date, ":", sub("(.*)-[0-9]{2}", "", name))     # everything else
+      )
+    )
   
   return(allEmailStats)
 }
@@ -2321,7 +2337,7 @@ cleanURL <- function(url) {
 
 
 #' filter all newsletters data frame by page URLs
-getCampaignEmails <- function(pageURLs){
+getCampaignEmailsOLD <- function(pageURLs){
   
   #' filter each of the 3 "story_url" columns for campaign web page URLs
   # df1 <- allEmailStats %>% select(c('id':'COR_S1')) %>% 
@@ -2377,6 +2393,78 @@ getCampaignEmails <- function(pageURLs){
   allStoryStats <- allStoryStats[rev(order(allStoryStats$date)),] %>% 
     select(id, name, date, delivered_ = delivered, unique_opens, open_rate, unique_clicks,
            unique_CTR, UCTRvsAvg, story_url, story_title, story_clicks, story_COR)
+  
+  return(allStoryStats)
+}
+
+
+#' filter all newsletters data frame by page URLs
+getCampaignEmails <- function(pageURLs){
+  
+  #' filter each of the 3 "story_url" columns for campaign web page URLs
+  # df1 <- allEmailStats %>% select(c('id':'COR_S1')) %>% 
+  #   rename(story_url = url_1,
+  #          story_title = title_1,
+  #          story_clicks = clicks_1, 
+  #          story_COR = COR_S1)
+  df1 <- allEmailStats %>% select(c('id':'COR')) %>% 
+    rename(story_url = url,
+           story_title = title,
+           story_clicks = clicks, 
+           story_COR = COR)
+  
+  # 
+  # testing_filtered_rows <- df1 %>%
+  #   filter(name == "2024-09-05: Spark" & story_title == "RMI at Climate Week 2024")
+  # 
+  # # Print the filtered rows
+  # print(testing_filtered_rows)
+  
+  
+  # df2 <- allEmailStats %>% select(c('id':'plaintext_rate', 'url_2':'COR_S2'))
+  # names(df2) <- names(df1)
+  # 
+  # df3 <- allEmailStats %>% select(c('id':'plaintext_rate', 'url_3':'COR_S3'))
+  # names(df3) <- names(df1)
+  # 
+  # df4 <- allEmailStats %>% select(c('id':'plaintext_rate', 'url_4':'COR_S4'))
+  # names(df4) <- names(df1)
+  
+  #' bind matches
+  # allStoryStats <- df1 %>% 
+  #   rbind(df2) %>% 
+  #   rbind(df3) %>% 
+  #   filter(grepl(paste(pageURLs, collapse = '|'), story_url)) %>% 
+  #   mutate(date = as.Date(date),
+  #          story_title = gsub(' - RMI', '', story_title))
+  
+  
+  df1 <- df1 %>% 
+    mutate(story_url = as.character(story_url)) %>%
+    mutate(
+      # normalize URLs
+      story_url = story_url %>%
+        str_replace("^http://", "https://") %>%   # force https
+        str_remove("\\?.*$") %>%                  # remove query params
+        str_replace("/?$", "/") %>%               # ensure single trailing slash
+        str_trim()
+    )
+  
+  
+  allStoryStats <- df1 %>% 
+    filter(
+      str_detect(story_url, paste(pageURLs, collapse = "|")) |
+        str_starts(name, "Fall Appeal")
+    ) %>% 
+    mutate(date = as.Date(date),
+           story_title = gsub(' - RMI', '', story_title)) %>%
+    # this line needs to change, wasn't delivered before
+    distinct(name, story_url, delivered, .keep_all = TRUE)
+  
+  #' order by date and keep relevant columns
+  allStoryStats <- allStoryStats[rev(order(allStoryStats$date)),] %>% 
+    select(id, name, date, delivered_ = delivered, unique_opens, open_rate, unique_clicks,
+           unique_CTR, UCTRvsAvg, story_url, story_title, story_clicks = storyClicks, story_COR)
   
   return(allStoryStats)
 }
@@ -4260,7 +4348,7 @@ cleanCampaignDF <- function(df){
     ) %>% 
     mutate(
       DownloadTF = ifelse(grepl('Download', EngagementType), 1, NA),
-      EventTF = ifelse(grepl('Attended', Status), 1, NA),
+      EventTF = ifelse(grepl('Registered', Status), 1, NA),
       EmailClickTF = ifelse(grepl('Newsletter', EngagementType), 1, NA),
       GivingCircleTF = ifelse(DonorType == 'Solutions Council'|DonorType == 'Innovators Circle', 1, NA),
       SolutionsCouncilTF = ifelse(DonorType == 'Solutions Council', 1, NA),
@@ -6260,6 +6348,23 @@ getPostAverages <- function(){
       engrtMean = round(mean(engagementRate), 3)
     ) 
   return(posts1YRaverages)
+}
+
+
+getHootPostAverages <- function(){
+  #switch name
+  allPosts <- merged_socialdata %>%
+    group_by(post_type, account) %>%
+    summarize(
+      numPosts = n(),
+      impressionsMedian = round(median(impressions, na.rm = TRUE), 1),
+      impressionsMean = round(mean(impressions, na.rm = TRUE), 1),
+      engagementsMedian = round(median(engagements), 1),
+      engagementsMean = round(mean(engagements), 1),
+      engrtMedian = round(median(engagementRate), 3),
+      engrtMean = round(mean(engagementRate), 3)
+    ) 
+  return(allPosts)
 }
 
 

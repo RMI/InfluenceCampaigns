@@ -14,6 +14,16 @@ library(stringr)
 library(dotenv)
 library(writexl)
 library(jsonlite)
+install.packages("remotes")
+remotes::install_github("stenevang/sftp", auth_token = NULL)
+library(sftp)
+install.packages("DBI")
+install.packages("RMariaDB")
+library(DBI)
+library(RMariaDB)
+
+
+
 #library(RMySQL)
 
 conflicts_prefer(jsonlite::toJSON)

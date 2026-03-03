@@ -83,7 +83,8 @@ propertyIDs <- rmiPropertyID
 
 dateRangeGA <- c("2023-01-01", paste(currentDate))
 campaign_tags <- c("cop28", "2023-2025_coalvgas", "oci+", "nycw24", 
-                   "transition-narrative", "cop29", "fapp24", "cera25", "sapp25", "nycw25")
+                   "transition-narrative", "cop29", "fapp24", "cera25", "sapp25", "nycw25",
+                   "cop30", "fapp25")
 
 # Call the main function to get filtered URLs with campaign tags; now using optimized new function
 filtered_urls <- data.frame(pagePath = character(),
@@ -202,13 +203,19 @@ corpEngagement <- pageDataTags %>%
   filter(cleanTitle == "Corporate Engagement") %>%
   mutate(campaign_tag = "sapp25")
 
-
 maxImpact <- pageDataTags %>%
   filter(cleanTitle == "Maximize Your Impact: Use Your Employer’s Matching Gift Program") %>%
   mutate(campaign_tag = "sapp25")
 
 # Bind the new row back to your dataframe
 pageDataTags <- bind_rows(pageDataTags, makeAGift, corpEngagement, maxImpact)
+
+pageDataTags <- pageDataTags %>%
+  bind_rows(
+    pageDataTags %>%
+      filter(campaign_tag == "fapp25") %>%
+      mutate(campaign_tag = "fapp24")
+  )
 
 
 #' set page titles
@@ -446,7 +453,14 @@ eventID_data <- eventID_data %>%
   filter(eventID != "701Qk00000LAFWLIA5") %>%
   filter(eventID != "701Qk00000Ztdr0IAB") %>%
   filter(eventID != "701Qk00000ZMcX8IAL") %>%
-  filter(eventID != "701Qk00000YgBGfIAN")
+  filter(eventID != "701Qk00000YgBGfIAN") %>%
+  filter(eventID != "701Qk00000IC90sIAD") %>%
+  filter(eventID != "701Qk00000c5V5JIAU") %>%
+  filter(eventID != "701Qk00000cEprHIAS") %>%
+  filter(eventID != "701Qk00000bjlbuIAA") %>%
+  filter(eventID != "701Qk00000aVLxxIAG") %>%
+  filter(eventID != "701Qk00000bfabhIAA")
+  
   
   
 
@@ -516,7 +530,7 @@ if(!exists('allEmailStats')){
 
 #' get newsletter story URLs
 #' 
-pageDataClean <- pageData %>%
+pageDataClean <- pageDataTags %>%
   mutate(pageURL = str_remove(pageURL, "\\?.*$"))
 
 pageURLs <- pageDataClean$pageURL
@@ -524,22 +538,84 @@ pageURLs <- pageDataClean$pageURL
 #rmi.org alone was being included
 pageURLs <- pageDataClean$pageURL[pageDataClean$pageURL != "https://rmi.org/"]
 
+
 #maybe need to add in "https://rmi.org/employer-match/"      
 
-campaignNewsletters <- getCampaignEmails(pageURLs) %>%
-  left_join(
-    campaignPages %>%
-      mutate(pagePath = str_remove(pagePath, "\\?.*$")) %>%
-      select(pagePath, campaign_tag, pageTitle) %>%   # <- make sure this column name matches exactly
-      distinct(pagePath, .keep_all = TRUE),
-    by = c("story_url" = "pagePath")
+#campaignNewsletters <- getCampaignEmails(pageURLs) %>%
+#  left_join(
+#    campaignPages %>%
+#      mutate(pagePath = str_remove(pagePath, "\\?.*$")) %>%
+#      select(pagePath, campaign_tag, pageTitle) %>%   # <- make sure this column name matches exactly
+#      distinct(pagePath, .keep_all = TRUE),
+#    by = c("story_url" = "pagePath")
+#  ) %>%
+#  rename(campaignID = campaign_tag) %>%
+#  mutate(
+#    campaignID = ifelse(str_detect(name, "Spring Appeal"), "sapp25", campaignID),
+#    story_title = coalesce(story_title, pageTitle)
+#  ) %>%
+#  select(-pageTitle)
+
+
+campaignNewslettersRevision <- getCampaignEmails(pageURLs)%>%
+  mutate(story_url = as.character(story_url),
+         
+  # recode titles only for Fall Appeal
+  story_title = case_when(
+  str_starts(name, "Fall Appeal") & story_url == "Subscribe/" ~ "Subscribe",
+  str_starts(name, "Fall Appeal") & story_url == "https://give.rmi.org/campaign/738368/donate/" ~ "Give.RMI.org",
+       TRUE ~ story_title
+         )
   ) %>%
+  filter(
+    # keep everything NOT Fall Appeal
+    !str_starts(name, "Fall Appeal") |
+      
+      # for Fall Appeal, only keep the two URLs
+      story_url %in% c(
+        "Subscribe/",
+        "https://give.rmi.org/campaign/738368/donate/"
+      )
+  )
+  
+
+# Still some mismatch in urls
+pageDataTagsClean <- pageDataTags %>%
+  mutate(
+    pageURL = pageURL %>%
+      str_replace("^http://", "https://") %>%
+      str_remove("\\?.*$") %>%   # remove query params
+      str_replace("/?$", "/") %>%
+      str_trim()
+  )
+
+campaignNewsletters <- campaignNewslettersRevision %>%
+  left_join(pageDataTagsClean, by = c("story_url" = "pageURL")) %>%
+  select("id":"story_url", story_title, story_clicks, story_COR, pageTitle) %>%  # keep original story_title
+  mutate(
+    # Only replace story_title if not Fall Appeal AND pageTitle is not NA
+    story_title = ifelse(
+      str_detect(name, regex("Fall Appeal", ignore_case = TRUE)) | is.na(pageTitle),
+      story_title,                 # keep existing value (e.g., "Subscribe")
+      str_remove(pageTitle, " - RMI$")  # otherwise use pageTitle cleaned
+    )
+  ) %>%
+  select(-pageTitle)  # remove helper column if needed
+
+
+campaignNewsletters <- campaignNewsletters  %>%
+  left_join(campaignPages %>%
+              select(pageTitle, pagePath, campaign_tag) %>%
+              distinct(pagePath, .keep_all = TRUE), 
+            by = c("story_title" = "pageTitle")) %>%  
   rename(campaignID = campaign_tag) %>%
   mutate(
-    campaignID = ifelse(str_detect(name, "Spring Appeal"), "sapp25", campaignID),
-    story_title = coalesce(story_title, pageTitle)
+    campaignID = case_when(
+      str_detect(name, regex("fall appeal", ignore_case = TRUE)) ~ "fapp25",
+      TRUE ~ campaignID
+    )
   ) %>%
-  select(-pageTitle)
+  distinct(name, story_title, .keep_all = TRUE)
 
 
 # for emails with a/b testing
@@ -566,25 +642,17 @@ campaignNewsletters <- campaignNewsletters %>%
 
 # NYCW and COP campaigns end 5 weeks after conferences; pages were being referenced in newsletters months after campaign finished
 campaignNewsletters <- campaignNewsletters %>%
-  filter(!(date > as.Date("2024-10-05") & campaignID == "nycw24")) %>%
- # filter(campaignID == "fapp24" & date >= as.Date("2024-09-28") & date <= as.Date("2024-10-27"))
-  filter(!(date > as.Date("2024-12-16") & campaignID == "cop29")) %>%
-  filter(!(date > as.Date("2025-06-30") & campaignID == "transition-narrative")) %>%
-  filter(!(date > as.Date("2023-12-30") & campaignID == "cop28")) %>%
-  filter(!(date > as.Date("2025-02-10") & campaignID == "fapp24")) %>%
-  filter(!(date > as.Date("2025-04-11") & campaignID == "cera25")) %>%
-  filter(!(date > as.Date("2025-06-30") & campaignID == "sapp25")) %>%
-  filter(!(date > as.Date("2025-10-04") & campaignID == "nycw25"))
-
-
+  filter(!(campaignID == "nycw24" & !between(date, as.Date("2024-09-01"), as.Date("2024-10-05")) & !is.na(date))) %>%
+  filter(!(campaignID == "cop29"  & !between(date, as.Date("2024-11-11"), as.Date("2024-12-16")) & !is.na(date))) %>%
+  filter(!(campaignID == "cop28"  & !between(date, as.Date("2023-11-30"), as.Date("2023-12-30")) & !is.na(date))) %>%
+  filter(!(campaignID == "fapp24" & !between(date, as.Date("2024-11-01"), as.Date("2025-02-10")) & !is.na(date))) %>%
+  filter(!(campaignID == "cera25" & !between(date, as.Date("2025-03-07"), as.Date("2025-04-11")) & !is.na(date))) %>%
+  filter(!(campaignID == "sapp25" & !between(date, as.Date("2025-03-30"), as.Date("2025-06-30")) & !is.na(date))) %>%
+  filter(!(campaignID == "nycw25" & !between(date, as.Date("2025-08-31"), as.Date("2025-10-04")) & !is.na(date))) %>%
+  filter(!(campaignID == "fapp25" & !between(date, as.Date("2025-11-03"), as.Date("2025-12-31")) & !is.na(date))) %>%
+  filter(!(campaignID == "cop30" & !between(date, as.Date("2025-11-10"), as.Date("2025-12-15")) & !is.na(date))) 
 
 # for now, for SF integration
-
-#campaignNewsletters <- campaignNewsletters %>%
-#  filter(!str_detect(id, "a6hQk")) 
-
-
-
 
 #' Set hasEmail to FALSE if no emails detected
 if(nrow(campaignNewsletters) == 0) hasEmail <- FALSE else hasEmail <- TRUE
@@ -822,20 +890,41 @@ SFcampaigns <- SFcampaigns %>%
     TRUE ~ CampaignName # Retain original value if no match
   ))
 
+SFcampaigns <- SFcampaigns %>%
+  mutate(`CampaignName` = if_else(
+    `CampaignName` == "2025_11_14 COP 30 Optimising Demand, Decarbonising Supply",
+    "COP 30 Optimising Demand, Decarbonising Supply",
+    `CampaignName`
+  ))
 
+# new, bc name mismatch in sf and ga
+SFcampaigns <- SFcampaigns %>%
+  left_join(
+    cleanedData %>% select(fullPageUrl, pageTitle) %>%
+      mutate(pageTitle = str_remove(pageTitle, " - RMI$")),
+    by = c("campaignID" = "fullPageUrl")
+  )
 
 
 # Adjusting for each campaign's unique date range
 
 SFcampaigns <- SFcampaigns %>%
   filter(
-    (campaignID == "sapp25" & EngagementDate >= as.Date("2025-03-30") & EngagementDate <= as.Date("2025-06-30")) |
+    campaignID %in% c(
+      "fapp25",
+      "transition-narrative",
+      "oci+",
+      "2023-2025_coalvgas"
+    ) |
+      
+      (campaignID == "sapp25" & EngagementDate >= as.Date("2025-03-30") & EngagementDate <= as.Date("2025-06-30")) |
       (campaignID == "fapp24" & EngagementDate >= as.Date("2024-11-01") & EngagementDate <= as.Date("2025-02-10")) |
       (campaignID == "nycw24" & EngagementDate >= as.Date("2024-09-01") & EngagementDate <= as.Date("2024-10-05")) |
       (campaignID == "nycw25" & EngagementDate >= as.Date("2025-08-31") & EngagementDate <= as.Date("2025-10-04")) |
       (campaignID == "cera25" & EngagementDate >= as.Date("2025-03-07") & EngagementDate <= as.Date("2025-04-11")) |
       (campaignID == "cop29" & EngagementDate >= as.Date("2024-11-11") & EngagementDate <= as.Date("2024-12-16")) |
-      (campaignID == "cop28" & EngagementDate >= as.Date("2023-11-30") & EngagementDate <= as.Date("2023-12-30"))
+      (campaignID == "cop28" & EngagementDate >= as.Date("2023-11-30") & EngagementDate <= as.Date("2023-12-30")) |
+      (campaignID == "cop30" & EngagementDate >= as.Date("2025-11-10") & EngagementDate <= as.Date("2025-12-15")) 
   )
 
 
@@ -858,37 +947,37 @@ message('GETTING SOCIAL MEDIA DATA')
 #' get all sprout social tags
 #' 
 
-metadeta <- getMetadata(url = 'metadata/customer/tags')
-tags <- metadeta[["data"]]
+#metadeta <- getMetadata(url = 'metadata/customer/tags')
+#tags <- metadeta[["data"]]
 
 #' get post averages based on all posts made over the last year 
-posts1YRaverages <- getPostAverages()
+#posts1YRaverages <- getPostAverages()
 
 #' get all social media posts with tags except for posts made from program LinkedIn accounts
-allPostsTags <- getAllSocialPosts2()
+# allPostsTags <- getAllSocialPosts2()
 
 #' get all posts from linkedIn program channels
-linkedInTagged <- getLIProgramPosts('tagged')
+# linkedInTagged <- getLIProgramPosts('tagged')
 
 #' clean and bind linkedin program posts to all posts
-taggedPosts <- cleanPostDF(allPostsTags, 'tagged') %>% 
-  rbind(linkedInTagged) %>% 
-  left_join(posts1YRaverages, by = c('post_type', 'account')) %>% 
+# taggedPosts <- cleanPostDF(allPostsTags, 'tagged') %>% 
+#  rbind(linkedInTagged) %>% 
+#  left_join(posts1YRaverages, by = c('post_type', 'account')) %>% 
   #' calculate post performance compared to avgs.
-  mutate(impressionsVmedian = round((impressions - impressionsMedian)/impressionsMedian, 3),
-         engagementsVmedian = round((engagements - engagementsMedian)/engagementsMedian, 3),
-         engrtVmedian = round((engagementRate - engrtMedian)/engrtMedian, 3),
-         impressionsVmean = round((impressions - impressionsMean)/impressionsMean, 3),
-         engagementsVmean = round((engagements - engagementsMean)/engagementsMean, 3),
-         engrtVmean = round((engagementRate - engrtMean)/engrtMean, 3),
-         brand = ifelse(grepl('RMI Brand', account), 1, 0),
-         program = ifelse(brand == 1, 0, 1),
-         accountType = ifelse(brand == 1, 'RMI Brand', 'RMI Program'),
-         post = 'Post') %>% 
-  select(created_time, account, post_type, icon, tag_id, tag_name, 
-         impressions, impressionsVmedian, impressionsVmean, engagements, engagementsVmedian, engagementsVmean, 
-         engagementRate, engrtVmedian, engrtVmean, postClicks, shares, 
-         brand, program, accountType, post, perma_link, text)
+#  mutate(impressionsVmedian = round((impressions - impressionsMedian)/impressionsMedian, 3),
+#         engagementsVmedian = round((engagements - engagementsMedian)/engagementsMedian, 3),
+#         engrtVmedian = round((engagementRate - engrtMedian)/engrtMedian, 3),
+#         impressionsVmean = round((impressions - impressionsMean)/impressionsMean, 3),
+#         engagementsVmean = round((engagements - engagementsMean)/engagementsMean, 3),
+#         engrtVmean = round((engagementRate - engrtMean)/engrtMean, 3),
+#         brand = ifelse(grepl('RMI Brand', account), 1, 0),
+#         program = ifelse(brand == 1, 0, 1),
+#         accountType = ifelse(brand == 1, 'RMI Brand', 'RMI Program'),
+#         post = 'Post') %>% 
+#  select(created_time, account, post_type, icon, tag_id, tag_name, 
+#         impressions, impressionsVmedian, impressionsVmean, engagements, engagementsVmedian, engagementsVmean, 
+#         engagementRate, engrtVmedian, engrtVmean, postClicks, shares, 
+#         brand, program, accountType, post, perma_link, text)
 #' 
 #' #' find tagged posts for this campaign
 #' if ('oci+' %in% campaign) {
@@ -904,38 +993,338 @@ taggedPosts <- cleanPostDF(allPostsTags, 'tagged') %>%
 #' 
 #' 
 
-pivotTaggedPosts <- taggedPosts %>%
-  distinct(perma_link, tag_name) %>%
-  group_by(perma_link) %>%
-  mutate(tag_num = paste0("tag", row_number())) %>%
-  ungroup() %>%
-  pivot_wider(
-    names_from = tag_num,  # Each unique tag position becomes a new column
-    values_from = tag_name # Fill these columns with the tag_name values
-  )
+# pivotTaggedPosts <- taggedPosts %>%
+#  distinct(perma_link, tag_name) %>%
+#  group_by(perma_link) %>%
+#  mutate(tag_num = paste0("tag", row_number())) %>%
+#  ungroup() %>%
+#  pivot_wider(
+#    names_from = tag_num,  # Each unique tag position becomes a new column
+#    values_from = tag_name # Fill these columns with the tag_name values
+#  )
 
 #redefining socialTag for transition-narrative
+#socialTag <- unique(campaignPages$campaign_tag[!is.na(campaignPages$campaign_tag)])
+
+#socialTag <- c(socialTag, "[1] 17. Energy Transition Narrative [transition-narrative]")
+#socialTag <- c(socialTag, "Fall Appeal 24") 
+#socialTag <- c(socialTag, "sapp25")
+#socialTag <- c(socialTag, "fapp25")
+#socialTag <- c(socialTag, "Fall Appeal 25") 
+
+
+
+
+
+# campaignPosts <- taggedPosts %>% 
+#  mutate(tag_name = ifelse(grepl('OCI\\+', text) & created_time >= '2023-04-05', 'OCI+', tag_name)) %>%
+#  filter(tolower(tag_name) %in% tolower(socialTag)) %>% 
+#  distinct(perma_link, .keep_all = TRUE) %>%
+#  left_join(pivotTaggedPosts, by = "perma_link")
+
+#campaignPosts <- campaignPosts %>%
+#  mutate(account = ifelse(trimws(account) == "" & post_type == "LinkedIn", "RMI Brand", account))
+
+# RUN THIS
+#write.csv(campaignPosts, "campaignPostsExportCampaign.csv", row.names = FALSE)
+
+campaignPosts <- read.csv("campaignPostsExportCampaign.csv")
+
+# Hootsuite data
+
+
+root <- sftp_connect(
+  server = "s-4847307e654242858.server.transfer.us-east-1.amazonaws.com",
+  folder = "export",
+  username = "RockyMountainInstitute@hootsuite.biz",
+  password = "EgaEcT@BKDr&sdSX",
+  protocol = "sftp://",
+  port = 22,
+  timeout = 30
+)
+
+dirs <- sftp_list(root)  
+folders <- dirs$name 
+
+date_folders <- folders[grepl("^\\d{4}_\\d{2}_\\d{2}$", folders)]
+
+latest_folder <- sort(date_folders, decreasing = TRUE)[1]
+
+
+connection <- sftp_connect(
+  server = "s-4847307e654242858.server.transfer.us-east-1.amazonaws.com",
+  folder = paste0("export/", latest_folder),
+  username = "RockyMountainInstitute@hootsuite.biz",
+  password = "EgaEcT@BKDr&sdSX",
+  protocol = "sftp://",
+  port = 22,
+  timeout = 30
+)
+
+base_path <- "C:/Users/elizabeth.duchan/OneDrive - RMI/Documents/GitHub/Outcome 12 Dashboard"
+
+
+local_folder <- file.path(base_path, latest_folder)
+
+if (!dir.exists(local_folder)) {
+  dir.create(local_folder, recursive = TRUE)
+}
+
+csv_files <- sftp_list(connection)$name
+
+lapply(csv_files, function(f) {
+  sftp_download(
+    f,
+    tofolder = local_folder,
+    sftp_connection = connection,
+    verbose = TRUE
+  )
+})
+
+
+# relevant files
+linkedin_content  <- read.csv(file.path(local_folder, "linkedin_content.csv"))
+linkedin_tags  <- read.csv(file.path(local_folder, "linkedin_tags.csv"))
+linkedin_connections  <- read.csv(file.path(local_folder, "linkedin_connections.csv"))
+
+facebook_content  <- read.csv(file.path(local_folder, "facebook_content.csv"))
+facebook_tags  <- read.csv(file.path(local_folder, "facebook_tags.csv"))
+facebook_connections  <- read.csv(file.path(local_folder, "facebook_connections.csv"))
+
+instagram_content  <- read.csv(file.path(local_folder, "instagram_business_content.csv"))
+instagram_tags  <- read.csv(file.path(local_folder, "instagram_business_tags.csv"))
+instagram_connections  <- read.csv(file.path(local_folder, "instagram_business_connections.csv"))
+
+
+linkedin_lifetime <- linkedin_content %>%
+  select(content_id, created_time, native_content_id, social_platform_id, text= body, clicks,
+         comments, impressions, likes, shares, video_view, unique_impressions, engagementRate = engagement, 
+         post_type) %>%
+  mutate(perma_link = paste0("https://linkedin.com/feed/update/", native_content_id)) %>%
+  mutate(post_type = "LinkedIn", post = "Post") %>%
+  mutate(engagements = rowSums(across(c(comments, shares, likes, clicks)), na.rm = TRUE)) %>%
+  left_join(linkedin_connections, by = "social_platform_id") %>%
+  rename(account = title) %>%
+  mutate(account = if_else(account == "Climate Finance Access Network (CFAN)",
+                           "CFAN",
+                           account)) %>%
+  mutate(native_content_id = as.character(native_content_id))
+
+
+
+linkedin_tags_wide <- linkedin_tags %>%
+  group_by(content_id) %>%
+  mutate(tag_num = paste0("tag", row_number())) %>%
+  pivot_wider(
+    names_from = tag_num,
+    values_from = tag
+  ) %>%
+  ungroup() %>%
+  mutate(across(starts_with("tag"), ~ str_to_title(.)))
+
+linkedin_lifetime_tags <- linkedin_lifetime %>%
+  left_join(linkedin_tags_wide, by = "content_id") %>%
+  mutate(tag_name = tag1) %>%
+  distinct(content_id, .keep_all = TRUE)
+
+# Facebook
+
+facebook_lifetime <- facebook_content %>%
+  select(content_id, created_time, native_content_id, social_platform_id, text= body, comments, post_engagement,
+         impressions = post_impressions_unique, likes = likes_unique, shares,  post_type) %>%
+  #change if multiple fb accounts
+  mutate(perma_link = paste0("https://www.facebook.com/344520634375161/posts/", native_content_id)) %>%
+  mutate(post_type = "Facebook", post = "Post") %>%
+  mutate(engagements = post_engagement) %>%
+  # mutate(engagements = rowSums(across(c(comments, shares, likes, likes2, clicks)), na.rm = TRUE)) %>%
+  mutate(engagementRate = round(engagements / impressions, 3)) %>%
+  left_join(facebook_connections, by = "social_platform_id") %>%
+  rename(account = title) %>%
+  mutate(account = if_else(account == "RMI",
+                           "RMI Brand",
+                           account)) %>%
+  mutate(native_content_id = as.character(native_content_id))
+
+
+facebook_tags_wide <- facebook_tags %>%
+  group_by(content_id) %>%
+  mutate(tag_num = paste0("tag", row_number())) %>%
+  pivot_wider(
+    names_from = tag_num,
+    values_from = tag
+  ) %>%
+  ungroup() %>%
+  mutate(across(starts_with("tag"), ~ str_to_title(.)))
+
+facebook_lifetime_tags <- facebook_lifetime %>%
+  left_join(facebook_tags_wide, by = "content_id") %>%
+  mutate(tag_name = tag1) %>%
+  distinct(content_id, .keep_all = TRUE)
+
+# Instagram
+
+instagram_lifetime <- instagram_content %>%
+  select(content_id, created_time, native_content_id, social_platform_id, text= body, 
+         comments, impressions = reach, likes, shares, engagements = engagement, 
+         engagementRate = engagement_rate, post_type) %>%
+  #need to change
+  mutate(perma_link = paste0("https://www.instagram.com/", native_content_id, "/")) %>%
+  mutate(post_type = "Instagram", post = "Post") %>%
+  left_join(instagram_connections, by = "social_platform_id") %>%
+  rename(account = title) %>%
+  mutate(account = if_else(account == "rockymtninst",
+                           "RMI Brand",
+                           account)) %>%
+  mutate(native_content_id = as.character(native_content_id))
+
+
+
+instagram_tags_wide <- instagram_tags %>%
+  group_by(content_id) %>%
+  mutate(tag_num = paste0("tag", row_number())) %>%
+  pivot_wider(
+    names_from = tag_num,
+    values_from = tag
+  ) %>%
+  ungroup() %>%
+  mutate(across(starts_with("tag"), ~ str_to_title(.)))
+
+instagram_lifetime_tags <- instagram_lifetime %>%
+  left_join(instagram_tags_wide, by = "content_id") %>%
+  mutate(tag_name = tag1) %>%
+  distinct(content_id, .keep_all = TRUE)
+
+
+merged_socialdata <- bind_rows(linkedin_lifetime_tags, facebook_lifetime_tags, instagram_lifetime_tags)
+
+
+# After everything is appended...
+
+posts1YRaverages <- getHootPostAverages()
+
+
+merged_socialdata <- merged_socialdata %>%
+  left_join(posts1YRaverages, by = c('post_type', 'account')) %>% 
+  mutate(impressionsVmedian = round((impressions - impressionsMedian)/impressionsMedian, 3),
+         engagementsVmedian = round((engagements - engagementsMedian)/engagementsMedian, 3),
+         engrtVmedian = round((engagementRate - engrtMedian)/engrtMedian, 3),
+         impressionsVmean = round((impressions - impressionsMean)/impressionsMean, 3),
+         engagementsVmean = round((engagements - engagementsMean)/engagementsMean, 3),
+         engrtVmean = round((engagementRate - engrtMean)/engrtMean, 3),
+         
+         brand = ifelse(grepl('RMI Brand', account), 1, 0),
+         accountType = ifelse(brand == 1, 'RMI Brand', 'RMI Program'),
+         program = ifelse(brand == 1, 0, 1)) %>%
+  mutate(icon = 0) %>%
+  mutate(tag_id = 0) %>%
+  filter(created_time >= "2024-09-01") %>%
+  select(created_time, account, post_type, icon, tag_id, tag_name, 
+         impressions, impressionsVmedian, impressionsVmean, engagements, engagementsVmedian, engagementsVmean, 
+         engagementRate, engrtVmedian, engrtVmean, postClicks = clicks, shares, videoViews = video_view,
+         brand, program, accountType, post, perma_link, text, tag1, tag2, tag3, tag4, tag5, tag6, tag7, tag8) %>%
+  mutate(created_time = as.Date(created_time))
+
+
+# Combining with sprout data to retain old tags. Surgery!
+# 10/25 is last post from sprout, 10/27 is first post from hootsuite with tags
+
+# Add to final
+
+cutMerged_socialdata <- merged_socialdata %>%
+  filter(created_time >= "2025-10-26") 
+
+cutCampaignPostsOld <- campaignPosts %>%
+  filter(created_time < "2024-09-15") %>%
+  filter(post_type != ("Twitter")) 
+
+cutCampaignPostsX <- campaignPosts %>%
+  filter(post_type == "Twitter") 
+
+slicedCampaignPosts <- merged_socialdata %>%
+  select(-tag1, -tag2, -tag3, -tag4, -tag5, -tag6, -tag7, -tag8) %>%
+  filter(created_time < "2025-10-26") %>%
+  filter(post_type %in% c ("LinkedIn", "Facebook")) %>%
+  left_join(campaignPosts %>% select(perma_link, tag1, tag2, tag3, tag4, tag5, tag6, tag7, tag8, tag9, tag10, tag11),
+            by = "perma_link")
+
+slicedCampaignPostsInsta <- merged_socialdata %>%
+  select(-tag1, -tag2, -tag3, -tag4, -tag5, -tag6, -tag7, -tag8) %>%
+  filter(created_time < "2025-10-26") %>%
+  filter(post_type == "Instagram") %>%
+  left_join(campaignPosts %>% 
+              filter(post_type == "Instagram") %>%
+              select(text, tag1, tag2, tag3, tag4, tag5, tag6, tag7, tag8, tag9, tag10, tag11),
+            by = "text")
+
+fix_date <- function(df) {
+  df %>%
+    mutate(created_time = as.Date(created_time))
+}
+
+#finalCampaignPosts <- bind_rows(cutMerged_socialdata, cutCampaignPostsOld, cutCampaignPostsX, slicedCampaignPosts, slicedCampaignPostsInsta)
+
+finalCampaignPosts <- bind_rows(
+  fix_date(cutMerged_socialdata),
+  fix_date(cutCampaignPostsOld),
+  fix_date(cutCampaignPostsX),
+  fix_date(slicedCampaignPosts),
+  fix_date(slicedCampaignPostsInsta)
+)
+
+finalCampaignPosts <- finalCampaignPosts %>%
+  distinct(post_type, text, created_time, .keep_all = TRUE)
+
+
 socialTag <- unique(campaignPages$campaign_tag[!is.na(campaignPages$campaign_tag)])
 
 socialTag <- c(socialTag, "[1] 17. Energy Transition Narrative [transition-narrative]")
+socialTag <- c(socialTag, "oci+") 
+socialTag <- c(socialTag, "OCI+") 
+socialTag <- c(socialTag, "2023-2025_CoalvGas") 
+socialTag <- c(socialTag, "COP28") 
 socialTag <- c(socialTag, "Fall Appeal 24") 
 socialTag <- c(socialTag, "sapp25")
+socialTag <- c(socialTag, "fapp25")
+socialTag <- c(socialTag, "Fall Appeal 25") 
+socialTag <- c(socialTag, "Cop30") 
+socialTag <- c(socialTag, "Cop 30") 
 
 
 
-campaignPosts <- taggedPosts %>% 
-  mutate(tag_name = ifelse(grepl('OCI\\+', text) & created_time >= '2023-04-05', 'OCI+', tag_name)) %>%
-  filter(tolower(tag_name) %in% tolower(socialTag)) %>% 
-  distinct(perma_link, .keep_all = TRUE) %>%
-  left_join(pivotTaggedPosts, by = "perma_link")
+
+finalCampaignPosts <- finalCampaignPosts %>%
+  mutate(
+    tag_name = case_when(
+      tag1 %in% socialTag ~ tag1,
+      tag2 %in% socialTag ~ tag2,
+      tag3 %in% socialTag ~ tag3,
+      tag4 %in% socialTag ~ tag4,
+      tag5 %in% socialTag ~ tag5,
+      tag6 %in% socialTag ~ tag6,
+      tag7 %in% socialTag ~ tag7,
+      tag8 %in% socialTag ~ tag8,
+      tag9 %in% socialTag ~ tag9,
+      tag10 %in% socialTag ~ tag10,
+      tag11 %in% socialTag ~ tag11,
+      TRUE ~ tag_name
+    )
+  )
+
+finalCampaignPosts <- finalCampaignPosts %>%
+  filter(tag_name %in% socialTag)
+
+campaignPosts <- finalCampaignPosts
+
 
 campaignPosts <- campaignPosts %>%
-  mutate(account = ifelse(trimws(account) == "" & post_type == "LinkedIn", "RMI Brand", account))
-
-# RUN THIS
-write.csv(campaignPosts, "campaignPostsExportCampaign.csv", row.names = FALSE)
-
-campaignPosts <- read.csv("campaignPostsExportCampaign.csv")
+  mutate(campaignID = tolower(tag_name)) %>%
+  mutate(campaignID = ifelse(campaignID == "[1] 17. energy transition narrative [transition-narrative]", 
+                             "transition-narrative", campaignID)) %>%
+  mutate(campaignID = ifelse(campaignID == "fall appeal 24", 
+                             "fapp24", campaignID)) %>%
+  mutate(campaignID = ifelse(campaignID == "fall appeal 25", 
+                             "fapp25", campaignID)) %>%
+  distinct(perma_link, post_type, .keep_all = TRUE)
 
 
 ####' Monday.com ####
@@ -1319,7 +1708,8 @@ con <- dbConnect(
 # }
 
 #v2 - might need to move below to where campaign id is assigned?
-campaign_ids <- c("cop28", "2023-2025_coalvgas", "oci+", "nycw24", "OCI", "2023_CoalvGas", "transition-narrative", "cop29", "fapp24", "cera25", "sapp25", "nycw25")
+campaign_ids <- c("cop28", "2023-2025_coalvgas", "oci+", "nycw24", "OCI", "2023_CoalvGas", "transition-narrative",
+                  "cop29", "fapp24", "cera25", "sapp25", "nycw25", "fapp25", "cop30")
 campaign_ids <- paste0("'", campaign_ids, "'", collapse = ", ")
 
 
@@ -1335,11 +1725,6 @@ campaign_ids <- paste0("'", campaign_ids, "'", collapse = ", ")
 # for sf campaigns: date indicates when someone engaged, and the last time the dashboard was refreshed was 7/31
 
 for (i in tables) {
-  # Skip deleting from campaignPosts
-  if (i == "campaignposts") {
-    message("Skipping table: ", i)
-    next
-  }
   
   tryCatch({
     # Conditional delete logic
@@ -1363,7 +1748,8 @@ for (i in tables) {
   })
 }
 
-dbSendQuery(con, "DELETE FROM sfcampaigns;")
+dbSendQuery(con, "DELETE FROM campaignPosts;")
+
 
 #for sf campaigns
 #for (i in tables){
@@ -1421,8 +1807,7 @@ mediaReferrals <- mediaReferrals %>%
             by = "pageTitle") %>%
 
 mediaReferrals <- mediaReferrals %>%
-  rename(campaignID = campaign_tag.x) %>% 
-  select(-campaign_tag.y)
+  rename(campaignID = campaign_tag)
 
   
 #new, changing names
@@ -1477,12 +1862,6 @@ SFcampaigns <- SFcampaigns %>%
 # come back to this later
 donations <- donations
 
-campaignPosts <- campaignPosts %>%
-  mutate(campaignID = tolower(tag_name)) %>%
-  mutate(campaignID = ifelse(campaignID == "[1] 17. energy transition narrative [transition-narrative]", 
-                             "transition-narrative", campaignID)) %>%
-  mutate(campaignID = ifelse(campaignID == "fall appeal 24", 
-                             "fapp24", campaignID))
 
 #campaignPosts <- read.csv("campaignPostsExportCampaign.csv")
 
@@ -1595,7 +1974,7 @@ dbWriteTable(con, name = 'mediaReferrals', value = mediaReferrals, append = T)
 #dbWriteTable(con, name = 'mediaReferrals', value = mediaReferrals, overwrite = TRUE)
 dbWriteTable(con, name = 'campaignNewsletters', value = campaignNewsletters, append = T)
 #dbWriteTable(con, name = 'campaignNewsletters', value = campaignNewsletters, overwrite = TRUE)
-#dbWriteTable(con, name = 'campaignPosts', value = campaignPosts, append = T)
+dbWriteTable(con, name = 'campaignPosts', value = campaignPosts, append = T)
 #dbWriteTable(con, name = 'campaignPosts', value = campaignPosts, overwrite = TRUE)
 dbWriteTable(con, name = 'SFcampaigns', value = SFcampaigns, append = T)
 #dbWriteTable(con, name = 'SFcampaigns', value = SFcampaigns, overwrite = TRUE)
