@@ -374,6 +374,48 @@ url5 <- "https://rmi.org/insight/toward-a-shared-zero-carbon-energy-future/"
 campaign_tag <- scrape_campaigntag(url5)
 print(campaign_tag)
 
+
+
+library(httr2)
+library(jsonlite)
+library(stringi)
+
+scrape_campaigntag_raw <- function(url, campaign_tags_lower) {
+  if (!grepl("^http", url)) url <- paste0("https://rmi.org", url)
+  
+  tryCatch({
+    resp <- request(url) |>
+      req_user_agent("rmi-tag-scan/1.0") |>
+      req_timeout(15) |>
+      req_perform()
+    
+    html <- resp_body_string(resp)
+    
+    # extract ld+json script blocks (non-greedy)
+    scripts <- stri_match_all_regex(
+      html,
+      '(?is)<script[^>]*type=["\']application/ld\\+json["\'][^>]*>(.*?)</script>'
+    )[[1]][,2]
+    
+    if (length(scripts) == 0) return(NULL)
+    
+    for (s in scripts) {
+      jc <- tryCatch(fromJSON(s), error = function(e) NULL)
+      if (is.null(jc)) next
+      
+      kw <- jc$keywords
+      if (is.null(kw)) next
+      if (is.character(kw)) {
+        hit <- intersect(campaign_tags_lower, tolower(kw))
+        if (length(hit)) return(hit[[1]])
+      }
+    }
+    
+    NULL
+  }, error = function(e) NULL)
+}
+
+
 #test_url <- "https://rmi.org/people/nicole-leonard/" # A URL path from GA4
 
 # Call the scraping function and print the result
@@ -517,6 +559,90 @@ getWebsiteURLs2 <- function(propertyID, campaign_tags, date_range = dateRangeGA,
   return(filtered_urls)
 }
 
+
+getWebsiteURLsV3 <- function(propertyID,
+                             campaign_tags,
+                             date_range = dateRangeGA,
+                             pages_filter_criteria = NULL,
+                             progress_every = 50,
+                             view_threshold = 50,
+                             workers = 8, debug = FALSE) {
+  
+  # GA4 pull
+  all_data <- ga_data(
+    propertyID,
+    metrics    = c("screenPageViews"),
+    dimensions = c("pageTitle", "fullPageUrl"),
+    date_range = date_range,
+    limit      = -1
+  )
+  
+  url_data <- as.data.frame(all_data)
+  message(sprintf("retrieved: %s rows of data from GA4", nrow(url_data)))
+  
+  # Filter pages
+  filtered_pages <- url_data %>%
+    filter(grepl("rmi.org", fullPageUrl)) %>%
+    filter(pageTitle != "Page not found - RMI") %>%
+    filter(pageTitle != "(not set)") %>%
+    filter(pageTitle != "") %>%
+    filter(!grepl("rmi.org/people", fullPageUrl)) %>%
+    filter(!grepl("rmi.org/privacy-policy", fullPageUrl)) %>%
+    filter(!grepl("rmi.org/careers", fullPageUrl)) %>%
+    filter(!grepl("rmi.org/search", fullPageUrl)) %>%
+    filter(screenPageViews > 100) %>%
+    mutate(
+      pageURL   = ifelse(grepl("^https?://", fullPageUrl),
+                         fullPageUrl,
+                         paste0("https://", fullPageUrl)),
+      pageTitle = gsub(" - RMI$", "", pageTitle),
+      site      = "rmi.org",
+      metadata  = "",
+      pageType  = ""
+    )
+  
+  if (debug == TRUE) {
+    filtered_pages <- filtered_pages[1:100, ]
+  }
+  
+  message(sprintf("filtered down to: %s rows after applying criteria", nrow(filtered_pages)))
+  
+  urls <- filtered_pages$pageURL
+  n <- length(urls)
+  
+  if (!n) {
+    return(data.frame(pagePath = character(), campaign_tag = character(), stringsAsFactors = FALSE))
+  }
+  
+  campaign_tags_lower <- tolower(campaign_tags)
+  
+  # sequential scan, no rbind-in-loop; keep alignment with urls
+  tags_found <- rep(NA_character_, n)
+  
+  for (i in seq_len(n)) {
+    if (progress_every > 0 && (i %% progress_every == 0)) {
+      message(sprintf("scraped %s/%s", i, n))
+    }
+    
+    x <- scrape_campaigntag_raw(urls[i], campaign_tags_lower)
+    if (!is.null(x) && length(x)) tags_found[i] <- as.character(x)[1]
+  }
+  
+  out <- data.frame(
+    pagePath = urls,
+    campaign_tag = tags_found,
+    stringsAsFactors = FALSE
+  )
+  
+  out <- out[!is.na(out$campaign_tag) & out$campaign_tag != "", , drop = FALSE]
+  
+  # map back to original casing (since scraper returns lowercase)
+  tag_map <- stats::setNames(campaign_tags, tolower(campaign_tags))
+  out$campaign_tag <- unname(tag_map[tolower(out$campaign_tag)])
+  
+  rownames(out) <- NULL
+  out
+}
 
 #url_data <- as.data.frame(all_data)
 #print(url_data$pagePath)
