@@ -333,7 +333,7 @@ scrape_campaigntag <- function(url) {
   
   #initialize campaign tag var  
   campaign_tags <- c("cop28", "2023-2025_coalvgas", "oci+", "nycw24", "transition-narrative", 
-                     "cop29", "fapp24", "cera25", "sapp25", "nycw25", "fapp25", "cop30") # add to or change
+                     "cop29", "fapp24", "cera25", "sapp25", "nycw25", "fapp25", "cop30", "cera26") # add to or change
   campaign_tag <- NULL #initializing
 
   #loops through each element, parsing json string
@@ -590,7 +590,7 @@ getWebsiteURLsV3 <- function(propertyID,
     filter(!grepl("rmi.org/privacy-policy", fullPageUrl)) %>%
     filter(!grepl("rmi.org/careers", fullPageUrl)) %>%
     filter(!grepl("rmi.org/search", fullPageUrl)) %>%
-    filter(screenPageViews > 100) %>%
+    filter(screenPageViews > 50) %>%
     mutate(
       pageURL   = ifelse(grepl("^https?://", fullPageUrl),
                          fullPageUrl,
@@ -647,6 +647,156 @@ getWebsiteURLsV3 <- function(propertyID,
 #url_data <- as.data.frame(all_data)
 #print(url_data$pagePath)
 
+getWebsiteURLsV4 <- function(propertyID,
+                             campaign_tags,
+                             date_range = dateRangeGA,
+                             pages_filter_criteria = NULL,
+                             progress_every = 50,
+                             view_threshold = 50,
+                             workers = 8,
+                             debug = FALSE) {
+  
+  # GA4 pull
+  all_data <- ga_data(
+    propertyID,
+    metrics    = c("screenPageViews"),
+    dimensions = c("pageTitle", "fullPageUrl"),
+    date_range = date_range,
+    limit      = -1
+  )
+  
+  url_data <- as.data.frame(all_data)
+  message(sprintf("retrieved: %s rows of data from GA4", nrow(url_data)))
+  
+  # Filter pages
+  filtered_pages <- url_data %>%
+    dplyr::filter(grepl("rmi.org", fullPageUrl)) %>%
+    dplyr::filter(pageTitle != "Page not found - RMI") %>%
+    dplyr::filter(pageTitle != "(not set)") %>%
+    dplyr::filter(pageTitle != "") %>%
+    dplyr::filter(!grepl("rmi.org/people", fullPageUrl)) %>%
+    dplyr::filter(!grepl("rmi.org/privacy-policy", fullPageUrl)) %>%
+    dplyr::filter(!grepl("rmi.org/careers", fullPageUrl)) %>%
+    dplyr::filter(!grepl("rmi.org/search", fullPageUrl)) %>%
+    dplyr::filter(screenPageViews > view_threshold) %>%
+    dplyr::mutate(
+      pageURL   = ifelse(grepl("^https?://", fullPageUrl),
+                         fullPageUrl,
+                         paste0("https://", fullPageUrl)),
+      pageTitle = gsub(" - RMI$", "", pageTitle),
+      site      = "rmi.org",
+      metadata  = "",
+      pageType  = ""
+    )
+  
+  if (debug == TRUE) {
+    filtered_pages <- filtered_pages[1:100, ]
+  }
+  
+  message(sprintf("filtered down to: %s rows after applying criteria", nrow(filtered_pages)))
+  
+  urls <- filtered_pages$pageURL
+  n <- length(urls)
+  
+  if (!n) {
+    return(data.frame(pagePath = character(),
+                      campaign_tag = character(),
+                      stringsAsFactors = FALSE))
+  }
+  
+  campaign_tags_lower <- tolower(campaign_tags)
+  tags_found <- rep(NA_character_, n)
+  
+  # ---- Scraper function ----
+  scrape_tag <- function(url) {
+    
+    tryCatch({
+      
+      page <- rvest::read_html(url)
+      
+      # ---- JSON LD ----
+      json_scripts <- page %>%
+        rvest::html_nodes('script[type="application/ld+json"]') %>%
+        rvest::html_text()
+      
+      for (script in json_scripts) {
+        
+        json_content <- tryCatch(
+          jsonlite::fromJSON(script),
+          error = function(e) NULL
+        )
+        
+        if (is.null(json_content)) next
+        
+        keywords <- NULL
+        
+        if ("keywords" %in% names(json_content)) {
+          keywords <- json_content$keywords
+        }
+        
+        if (!is.null(keywords)) {
+          
+          keywords <- tolower(paste(keywords, collapse = " "))
+          
+          for (tag in campaign_tags_lower) {
+            if (grepl(tag, keywords)) {
+              return(tag)
+            }
+          }
+        }
+      }
+      
+      # ---- META fallback ----
+      meta_keywords <- page %>%
+        rvest::html_nodes('meta[name="keywords"]') %>%
+        rvest::html_attr("content")
+      
+      if (length(meta_keywords)) {
+        
+        keywords <- tolower(paste(meta_keywords, collapse = " "))
+        
+        for (tag in campaign_tags_lower) {
+          if (grepl(tag, keywords)) {
+            return(tag)
+          }
+        }
+      }
+      
+      return(NA_character_)
+      
+    }, error = function(e) {
+      if (debug) message("error scraping: ", url)
+      return(NA_character_)
+    })
+  }
+  
+  # ---- Loop ----
+  for (i in seq_len(n)) {
+    
+    if (progress_every > 0 && (i %% progress_every == 0)) {
+      message(sprintf("scraped %s/%s", i, n))
+    }
+    
+    tags_found[i] <- scrape_tag(urls[i])
+  }
+  
+  out <- data.frame(
+    pagePath = urls,
+    campaign_tag = tags_found,
+    stringsAsFactors = FALSE
+  )
+  
+  # Remove NA tags
+  out <- out[!is.na(out$campaign_tag) & out$campaign_tag != "", , drop = FALSE]
+  
+  # Map back to original casing
+  tag_map <- stats::setNames(campaign_tags, tolower(campaign_tags))
+  out$campaign_tag <- unname(tag_map[tolower(out$campaign_tag)])
+  
+  rownames(out) <- NULL
+  
+  return(out)
+}
 
 # Print the URLs
 #print(url_data$pagePath)
@@ -654,7 +804,7 @@ getWebsiteURLsV3 <- function(propertyID,
 #getWebsiteURLs(propertyID = rmiPropertyID, campaign_tags = campaign_tags)
 rmiPropertyID <- 354053620
 campaign_tags <- c("cop28", "2023-2025_coalvgas", "oci+", "nycw24", "transition-narrative", "cop29", "fapp24", 
-                   "cera25", "sapp25", "nycw25", "fapp25", "cop30")
+                   "cera25", "sapp25", "nycw25", "fapp25", "cop30", "cera26")
 
 # Call the function with the correct arguments
 #filtered_urls <- getWebsiteURLs(propertyID = rmiPropertyID, campaign_tags = campaign_tags)
@@ -1233,15 +1383,17 @@ getPageMetrics3 <- function(propertyID, pageAndTag) {
   
   # Define campaign-specific date ranges
   customDateRanges <- list(
-    cop30 = c("2025-11-10", "2025-12-15"),
+    cop30 = c("2025-10-20", "2025-12-15"),
     fapp25 = c("2025-11-03", "2025-12-31"),
     sapp25 = c("2025-03-30", "2025-06-30"),
     fapp24 = c("2024-11-01", "2025-02-10"),
-    nycw24 = c("2024-09-01", "2024-10-05"),
+    nycw24 = c("2024-08-11", "2024-10-05"),
     nycw25 = c("2025-08-31", "2025-10-04"),
-    cera25 = c("2025-03-07", "2025-04-11"),
-    cop29 = c("2024-11-11", "2024-12-16"),
-    cop28 = c("2023-11-30", "2023-12-30")
+    cera25 = c("2025-02-14", "2025-04-11"),
+    cop29 = c("2024-10-21", "2024-12-16"),
+    cop28 = c("2023-10-09", "2023-12-30"),
+    cera26 = c("2026-03-02", "2026-05-01")
+    
    #transition-narrative = c("2024-11-01", "2025-02-10")
    #oci+ = c("2024-11-01", "2025-02-10")
    #2023-2025_coalvgas = c("2024-11-01", "2025-02-10")
@@ -1440,15 +1592,17 @@ getTrafficSocialWithTags <- function(propertyID, pageAndTag, site = 'rmi.org') {
   
   # Define custom date ranges per campaign tag
   customDateRanges <- list(
-    cop30 = c("2025-11-10", "2025-12-15"),
+    cop30 = c("2025-10-20", "2025-12-15"),
     fapp25 = c("2025-11-03", "2025-12-31"),
     sapp25 = c("2025-03-30", "2025-06-30"),
     fapp24 = c("2024-11-01", "2025-02-10"),
-    nycw24 = c("2024-09-01", "2024-10-05"),
+    nycw24 = c("2024-08-11", "2024-10-05"),
     nycw25 = c("2025-08-31", "2025-10-04"),
-    cera25 = c("2025-03-07", "2025-04-11"),
-    cop29 = c("2024-11-11", "2024-12-16"),
-    cop28 = c("2023-11-30", "2023-12-30")
+    cera25 = c("2025-02-14", "2025-04-11"),
+    cop29 = c("2024-10-21", "2024-12-16"),
+    cop28 = c("2023-10-09", "2023-12-30"),
+    cera26 = c("2026-03-02", "2026-05-01")
+    
   )
   
   defaultDateRange <- c("2023-01-01", as.character(Sys.Date()))
@@ -1513,7 +1667,7 @@ getTrafficSocialWithTags <- function(propertyID, pageAndTag, site = 'rmi.org') {
 
 
 # New and improved.
-getTrafficSocial2 <- function(propertyID, pages, campaignPages, site = 'rmi.org'){
+getTrafficSocial2OLD <- function(propertyID, pages, campaignPages, site = 'rmi.org'){
   print(paste("Inside getTrafficSocial with campaignID:", campaignID))  # Debugging
   
   aquisitionSocial <- ga_data(
@@ -1544,6 +1698,92 @@ getTrafficSocial2 <- function(propertyID, pages, campaignPages, site = 'rmi.org'
   return(aquisitionSocial)
 }
 
+
+getTrafficSocialWithTags <- function(propertyID, pageAndTag, site = 'rmi.org') {
+  
+  # Define custom date ranges per campaign tag
+  customDateRanges <- list(
+    cop30 = c("2025-10-20", "2025-12-15"),
+    fapp25 = c("2025-11-03", "2025-12-31"),
+    sapp25 = c("2025-03-30", "2025-06-30"),
+    fapp24 = c("2024-11-01", "2025-02-10"),
+    nycw24 = c("2024-08-11", "2024-10-05"),
+    nycw25 = c("2025-08-31", "2025-10-04"),
+    cera25 = c("2025-02-14", "2025-04-11"),
+    cop29 = c("2024-10-21", "2024-12-16"),
+    cop28 = c("2023-10-09", "2023-12-30"),
+    cera26 = c("2026-03-02", "2026-05-01")
+    
+  )
+  
+  defaultDateRange <- c("2023-01-01", as.character(Sys.Date()))
+  
+  # Clean up tag formatting
+  pageAndTag <- pageAndTag %>%
+    mutate(campaign_tag = na_if(trimws(campaign_tag), ""))
+  
+  allSocial <- data.frame()
+  
+  for (i in 1:nrow(pageAndTag)) {
+    
+    page <- pageAndTag$pageTitle[i]
+    tag  <- tolower(pageAndTag$campaign_tag[i])
+    
+    date_range <- if (!is.null(tag) && !is.na(tag) && tag %in% names(customDateRanges)) {
+      customDateRanges[[tag]]
+    } else {
+      defaultDateRange
+    }
+    
+    message(paste0("Processing page: ", page))
+    message(paste("Using date range:", paste(date_range, collapse = " to ")))
+    
+    socialData <- tryCatch({
+      ga_data(
+        propertyID,
+        metrics = c("sessions", "screenPageViews"),
+        dimensions = c(
+          "pageTitle",
+          "sessionSource",
+          "sessionMedium",
+          "pageReferrer",
+          "sessionDefaultChannelGroup"
+        ),
+        date_range = date_range,
+        dim_filters = ga_data_filter("pageTitle" == page),
+        limit = -1
+      )
+    }, error = function(e) {
+      message(paste("❌ GA4 error for", page, ":", e$message))
+      return(NULL)
+    })
+    
+    if (!is.null(socialData)) {
+      
+      traffic <- socialData %>%
+        mutate(
+          campaign_tag = tag   # ✅ FIX: attach BEFORE grouping
+        ) %>%
+        correctTraffic(type = "session") %>%
+        filter(medium == "social") %>%
+        group_by(pageTitle, source, campaign_tag) %>%  # ✅ FIX: include tag
+        summarize(
+          Sessions = sum(sessions),
+          PageViews = sum(screenPageViews),
+          .groups = "drop"
+        ) %>%
+        mutate(
+          startDate = date_range[1],
+          endDate = date_range[2],
+          site = site
+        )
+      
+      allSocial <- bind_rows(allSocial, traffic)
+    }
+  }
+  
+  return(allSocial)
+}
 
 getTrafficSocial3 <- function(propertyID, pages, campaignPages, site = 'rmi.org') {
   print(paste("Inside getTrafficSocial with propertyID:", propertyID))  # Debugging
@@ -1650,19 +1890,21 @@ getTrafficGeography <- function(propertyID, pages, site = 'rmi.org'){
 }
 
 
-getTrafficGeographyWithTags <- function(propertyID, pageAndTag, site = 'rmi.org') {
+getTrafficGeographyWithTagsOLD <- function(propertyID, pageAndTag, site = 'rmi.org') {
   
   # Define custom campaign-specific date ranges
   customDateRanges <- list(
-    cop30 = c("2025-11-10", "2025-12-15"),
+    cop30 = c("2025-10-20", "2025-12-15"),
     fapp25 = c("2025-11-03", "2025-12-31"),
     sapp25 = c("2025-03-30", "2025-06-30"),
     fapp24 = c("2024-11-01", "2025-02-10"),
-    nycw24 = c("2024-09-01", "2024-10-05"),
+    nycw24 = c("2024-08-11", "2024-10-05"),
     nycw25 = c("2025-08-31", "2025-10-04"),
-    cera25 = c("2025-03-07", "2025-04-11"),
-    cop29 = c("2024-11-11", "2024-12-16"),
-    cop28 = c("2023-11-30", "2023-12-30")
+    cera25 = c("2025-02-14", "2025-04-11"),
+    cop29 = c("2024-10-21", "2024-12-16"),
+    cop28 = c("2023-10-09", "2023-12-30"),
+    cera26 = c("2026-03-02", "2026-05-01")
+    
   )
   
   defaultDateRange <- c("2023-01-01", as.character(Sys.Date()))
@@ -1711,6 +1953,82 @@ getTrafficGeographyWithTags <- function(propertyID, pageAndTag, site = 'rmi.org'
           startDate = date_range[1],
           endDate = date_range[2],
           pageTitle = gsub(" - RMI", "", pageTitle),
+          site = site
+        )
+      
+      allGeo <- bind_rows(allGeo, cleaned)
+    }
+  }
+  
+  return(allGeo)
+}
+
+getTrafficGeographyWithTags <- function(propertyID, pageAndTag, site = 'rmi.org') {
+  
+  # Define custom campaign-specific date ranges
+  customDateRanges <- list(
+    cop30 = c("2025-10-20", "2025-12-15"),
+    fapp25 = c("2025-11-03", "2025-12-31"),
+    sapp25 = c("2025-03-30", "2025-06-30"),
+    fapp24 = c("2024-11-01", "2025-02-10"),
+    nycw24 = c("2024-08-11", "2024-10-05"),
+    nycw25 = c("2025-08-31", "2025-10-04"),
+    cera25 = c("2025-02-14", "2025-04-11"),
+    cop29 = c("2024-10-21", "2024-12-16"),
+    cop28 = c("2023-10-09", "2023-12-30"),
+    cera26 = c("2026-03-02", "2026-05-01")
+    
+  )
+  
+  defaultDateRange <- c("2023-01-01", as.character(Sys.Date()))
+  
+  # Clean up campaign tag values
+  pageAndTag <- pageAndTag %>%
+    mutate(campaign_tag = na_if(trimws(campaign_tag), ""))
+  
+  allGeo <- data.frame()
+  
+  for (i in 1:nrow(pageAndTag)) {
+    
+    page <- pageAndTag$pageTitle[i]
+    tag  <- tolower(pageAndTag$campaign_tag[i])
+    
+    date_range <- if (!is.null(tag) && !is.na(tag) && tag %in% names(customDateRanges)) {
+      customDateRanges[[tag]]
+    } else {
+      defaultDateRange
+    }
+    
+    message(paste0("Processing page: ", page))
+    message(paste("Using date range:", paste(date_range, collapse = " to ")))
+    
+    geoData <- tryCatch({
+      ga_data(
+        propertyID,
+        metrics = c("screenPageViews"),
+        dimensions = c("pageTitle", "region", "country"),
+        date_range = date_range,
+        dim_filters = ga_data_filter("pageTitle" == page),
+        limit = -1
+      )
+    }, error = function(e) {
+      message(paste("❌ GA4 error for", page, ":", e$message))
+      return(NULL)
+    })
+    
+    if (!is.null(geoData)) {
+      
+      cleaned <- geoData %>%
+        mutate(
+          campaign_tag = tag   # ✅ FIX: attach BEFORE anything else
+        ) %>%
+        filter(screenPageViews > 4) %>%
+        arrange(pageTitle) %>%
+        rename(`Region Page Views` = screenPageViews) %>%
+        mutate(
+          pageTitle = gsub(" - RMI", "", pageTitle),
+          startDate = date_range[1],
+          endDate = date_range[2],
           site = site
         )
       
@@ -1964,19 +2282,21 @@ getAcquisitionWithTags <- function(propertyID, pageAndTag, site = 'rmi.org') {
   return(allAcquisition)
 }
 
-getAcquisitionWithTags2 <- function(propertyID, pageAndTag, site = 'rmi.org') {
+getAcquisitionWithTags2OLD <- function(propertyID, pageAndTag, site = 'rmi.org') {
   
   # Define campaign-specific date ranges
   customDateRanges <- list(
-    cop30 = c("2025-11-10", "2025-12-15"),
+    cop30 = c("2025-10-20", "2025-12-15"),
     fapp25 = c("2025-11-03", "2025-12-31"),
     sapp25 = c("2025-03-30", "2025-06-30"),
     fapp24 = c("2024-11-01", "2025-02-10"),
-    nycw24 = c("2024-09-01", "2024-10-05"),
+    nycw24 = c("2024-08-11", "2024-10-05"),
     nycw25 = c("2025-08-31", "2025-10-04"),
-    cera25 = c("2025-03-07", "2025-04-11"),
-    cop29 = c("2024-11-11", "2024-12-16"),
-    cop28 = c("2023-11-30", "2023-12-30")
+    cera25 = c("2025-02-14", "2025-04-11"),
+    cop29 = c("2024-10-21", "2024-12-16"),
+    cop28 = c("2023-10-09", "2023-12-30"),
+    cera26 = c("2026-03-02", "2026-05-01")
+    
   )
   
   defaultDateRange <- c("2023-01-01", as.character(Sys.Date()))
@@ -2024,7 +2344,7 @@ getAcquisitionWithTags2 <- function(propertyID, pageAndTag, site = 'rmi.org') {
           defaultChannelGroup == "Organic Social" ~ "Social Media",
           TRUE ~ defaultChannelGroup
         )) %>%
-        group_by(pageTitle, defaultChannelGroup) %>%
+        group_by(pageTitle, defaultChannelGroup, campaign_tag) %>%
         summarize(Sessions = sum(sessions), .groups = "drop")
     }
     
@@ -2056,7 +2376,7 @@ getAcquisitionWithTags2 <- function(propertyID, pageAndTag, site = 'rmi.org') {
       
       if (!is.null(conversions)) {
         conversions <- correctTraffic(conversions, 'conversion') %>%
-          group_by(pageTitle, defaultChannelGroup) %>%
+          group_by(pageTitle, defaultChannelGroup, campaign_tag) %>%
           summarize(
             Downloads = sum(download),
             FormSubmissions = sum(form_submit),
@@ -2091,6 +2411,169 @@ getAcquisitionWithTags2 <- function(propertyID, pageAndTag, site = 'rmi.org') {
   
   return(allAcquisition)
 }
+
+getAcquisitionWithTags2 <- function(propertyID, pageAndTag, site = 'rmi.org') {
+  
+  # Define campaign-specific date ranges
+  customDateRanges <- list(
+    cop30 = c("2025-10-20", "2025-12-15"),
+    fapp25 = c("2025-11-03", "2025-12-31"),
+    sapp25 = c("2025-03-30", "2025-06-30"),
+    fapp24 = c("2024-11-01", "2025-02-10"),
+    nycw24 = c("2024-08-11", "2024-10-05"),
+    nycw25 = c("2025-08-31", "2025-10-04"),
+    cera25 = c("2025-02-14", "2025-04-11"),
+    cop29 = c("2024-10-21", "2024-12-16"),
+    cop28 = c("2023-10-09", "2023-12-30"),
+    cera26 = c("2026-03-02", "2026-05-01")
+    
+  )
+  
+  defaultDateRange <- c("2023-01-01", as.character(Sys.Date()))
+  
+  # Clean campaign tags
+  pageAndTag <- pageAndTag %>%
+    mutate(campaign_tag = na_if(trimws(campaign_tag), ""))
+  
+  allAcquisition <- data.frame()
+  
+  for (i in 1:nrow(pageAndTag)) {
+    
+    page <- pageAndTag$pageTitle[i]
+    tag  <- tolower(pageAndTag$campaign_tag[i])
+    
+    message(paste("GA query pageTitle filter:", page))
+    
+    date_range <- if (!is.null(tag) && !is.na(tag) && tag %in% names(customDateRanges)) {
+      customDateRanges[[tag]]
+    } else {
+      defaultDateRange
+    }
+    
+    # -------------------------
+    # SESSIONS
+    # -------------------------
+    sessions <- tryCatch({
+      ga_data(
+        propertyID,
+        metrics = c("sessions"),
+        dimensions = c(
+          "pageTitle",
+          "sessionSource",
+          "sessionMedium",
+          "pageReferrer",
+          "sessionDefaultChannelGroup"
+        ),
+        date_range = date_range,
+        dim_filters = ga_data_filter("pageTitle" == page),
+        limit = -1
+      )
+    }, error = function(e) {
+      message(paste("❌ Sessions error for", page, ":", e$message))
+      return(NULL)
+    })
+    
+    if (!is.null(sessions)) {
+      
+      sessions <- sessions %>%
+        mutate(campaign_tag = tag) %>%   # ✅ FIX: add BEFORE grouping
+        correctTraffic('session') %>%
+        mutate(defaultChannelGroup = case_when(
+          defaultChannelGroup == "Organic Video" ~ "Organic Search",
+          defaultChannelGroup == "Organic Social" ~ "Social Media",
+          TRUE ~ defaultChannelGroup
+        )) %>%
+        group_by(pageTitle, defaultChannelGroup, campaign_tag) %>%
+        summarize(
+          Sessions = sum(sessions),
+          .groups = "drop"
+        )
+    }
+    
+    # -------------------------
+    # CONVERSIONS
+    # -------------------------
+    conversions <- NULL
+    
+    if (site == "rmi.org") {
+      conversions <- tryCatch({
+        ga_data(
+          propertyID,
+          metrics = c(
+            "conversions:emailFormSubmit",
+            "conversions:downloadThankYou",
+            "conversions:donatePageView_Embedded",
+            "conversions:registerThankYou"
+          ),
+          dimensions = c(
+            "pageTitle",
+            "source",
+            "medium",
+            "pageReferrer",
+            "defaultChannelGroup"
+          ),
+          date_range = date_range,
+          dim_filters = ga_data_filter("pageTitle" == page),
+          limit = -1
+        ) %>%
+          select(
+            pageTitle, source, medium, pageReferrer, defaultChannelGroup,
+            form_submit = `conversions:emailFormSubmit`,
+            download = `conversions:downloadThankYou`,
+            donate_view = `conversions:donatePageView_Embedded`,
+            event_register = `conversions:registerThankYou`
+          )
+      }, error = function(e) {
+        message(paste("⚠️ Conversions error for", page, ":", e$message))
+        return(NULL)
+      })
+      
+      if (!is.null(conversions)) {
+        
+        conversions <- conversions %>%
+          mutate(campaign_tag = tag) %>%   # ✅ FIX: add BEFORE grouping
+          correctTraffic('conversion') %>%
+          group_by(pageTitle, defaultChannelGroup, campaign_tag) %>%
+          summarize(
+            Downloads = sum(download),
+            FormSubmissions = sum(form_submit),
+            DonationPageViews = sum(donate_view),
+            EventRegistered = sum(event_register),
+            .groups = "drop"
+          )
+      }
+    }
+    
+    # -------------------------
+    # MERGE
+    # -------------------------
+    if (!is.null(sessions)) {
+      
+      acq <- sessions
+      
+      if (!is.null(conversions)) {
+        acq <- left_join(
+          acq,
+          conversions,
+          by = c("pageTitle", "defaultChannelGroup", "campaign_tag")  # ✅ FIX
+        )
+      }
+      
+      acq <- acq %>%
+        mutate(
+          startDate = date_range[1],
+          endDate = date_range[2],
+          site = site,
+          pageTitle = gsub(" - RMI", "", pageTitle)
+        )
+      
+      allAcquisition <- bind_rows(allAcquisition, acq)
+    }
+  }
+  
+  return(allAcquisition)
+}
+
 
 getAcquisition2 <- function(propertyID, pages, site = 'rmi.org'){
   
@@ -2197,19 +2680,21 @@ getReferrals <- function(propertyID, pages, site = 'rmi.org'){
 }
 
 
-getReferralsWithTag <- function(propertyID, pageAndTag, site = 'rmi.org') {
+getReferralsWithTagOLD <- function(propertyID, pageAndTag, site = 'rmi.org') {
   
   # Define campaign-specific date ranges
   customDateRanges <- list(
-    cop30 = c("2025-11-10", "2025-12-15"),
+    cop30 = c("2025-10-20", "2025-12-15"),
     fapp25 = c("2025-11-03", "2025-12-31"),
     sapp25 = c("2025-03-30", "2025-06-30"),
     fapp24 = c("2024-11-01", "2025-02-10"),
-    nycw24 = c("2024-09-01", "2024-10-05"),
+    nycw24 = c("2024-08-11", "2024-10-05"),
     nycw25 = c("2025-08-31", "2025-10-04"),
-    cera25 = c("2025-03-07", "2025-04-11"),
-    cop29 = c("2024-11-11", "2024-12-16"),
-    cop28 = c("2023-11-30", "2023-12-30")
+    cera25 = c("2025-02-14", "2025-04-11"),
+    cop29 = c("2024-10-21", "2024-12-16"),
+    cop28 = c("2023-10-09", "2023-12-30"),
+    cera26 = c("2026-03-02", "2026-05-01")
+    
   )
   
   defaultDateRange <- c("2023-01-01", as.character(Sys.Date()))
@@ -2275,6 +2760,104 @@ getReferralsWithTag <- function(propertyID, pageAndTag, site = 'rmi.org') {
   return(allReferrals)
 }
 
+getReferralsWithTag <- function(propertyID, pageAndTag, site = 'rmi.org') {
+  
+  # Define campaign-specific date ranges
+  customDateRanges <- list(
+    cop30 = c("2025-10-20", "2025-12-15"),
+    fapp25 = c("2025-11-03", "2025-12-31"),
+    sapp25 = c("2025-03-30", "2025-06-30"),
+    fapp24 = c("2024-11-01", "2025-02-10"),
+    nycw24 = c("2024-08-11", "2024-10-05"),
+    nycw25 = c("2025-08-31", "2025-10-04"),
+    cera25 = c("2025-02-14", "2025-04-11"),
+    cop29 = c("2024-10-21", "2024-12-16"),
+    cop28 = c("2023-10-09", "2023-12-30"),
+    cera26 = c("2026-03-02", "2026-05-01")
+    
+  )
+  
+  defaultDateRange <- c("2023-01-01", as.character(Sys.Date()))
+  
+  pageAndTag <- pageAndTag %>%
+    mutate(campaign_tag = na_if(trimws(campaign_tag), ""))
+  
+  allReferrals <- data.frame()
+  
+  for (i in 1:nrow(pageAndTag)) {
+    
+    page <- pageAndTag$pageTitle[i]
+    tag  <- tolower(pageAndTag$campaign_tag[i])
+    
+    date_range <- if (!is.null(tag) && !is.na(tag) && tag %in% names(customDateRanges)) {
+      customDateRanges[[tag]]
+    } else {
+      defaultDateRange
+    }
+    
+    message(paste("Processing page:", page))
+    message(paste("Using date range:", paste(date_range, collapse = " to ")))
+    
+    referralData <- tryCatch({
+      ga_data(
+        propertyID,
+        metrics = c("sessions"),
+        dimensions = c(
+          "pageTitle",
+          "sessionSource",
+          "sessionMedium",
+          "pageReferrer"
+        ),
+        date_range = date_range,
+        dim_filters = ga_data_filter("pageTitle" == page),
+        limit = -1
+      )
+    }, error = function(e) {
+      message(paste("❌ Error processing", page, ":", e$message))
+      return(NULL)
+    })
+    
+    if (!is.null(referralData) && nrow(referralData) > 0) {
+      
+      cleaned <- referralData %>%
+        filter(sessionMedium == "referral") %>%
+        inner_join(
+          select(referralSites, media, sessionSource, mediaType, mediaSubtype),
+          by = "sessionSource"
+        ) %>%
+        mutate(
+          referrer = sub("(.*)https://", "", pageReferrer),
+          referrer = sub("/(.*)", "", referrer)
+        ) %>%
+        filter(referrer != "rmi.org") %>%
+        
+        mutate(
+          campaign_tag = tag   # ✅ FIX: attach BEFORE grouping
+        ) %>%
+        
+        group_by(pageTitle, sessionSource, media, mediaType, mediaSubtype, campaign_tag) %>%  # ✅ FIX
+        summarise(
+          sessions = sum(sessions),
+          .groups = "drop"
+        ) %>%
+        
+        filter(sessions > 2) %>%
+        mutate(
+          pageTitle = gsub(" - RMI", "", pageTitle),
+          startDate = date_range[1],
+          endDate = date_range[2],
+          site = site
+        )
+      
+      allReferrals <- bind_rows(allReferrals, cleaned)
+      
+    } else {
+      message(paste("⚠️ No referral data found for:", page))
+    }
+  }
+  
+  return(allReferrals)
+}
 
 
 getAcquisition2 <- function(propertyID, pages, site = 'rmi.org'){
@@ -2534,7 +3117,7 @@ getCampaignEmails <- function(pageURLs){
   #          story_clicks = clicks_1, 
   #          story_COR = COR_S1)
   df1 <- allEmailStats %>% select(c('id':'COR')) %>% 
-    rename(story_url = url,
+    rename(story_url = URL,
            story_title = title,
            story_clicks = clicks, 
            story_COR = COR)
@@ -2568,14 +3151,12 @@ getCampaignEmails <- function(pageURLs){
   df1 <- df1 %>% 
     mutate(story_url = as.character(story_url)) %>%
     mutate(
-      # normalize URLs
       story_url = story_url %>%
-        str_replace("^http://", "https://") %>%   # force https
-        str_remove("\\?.*$") %>%                  # remove query params
-        str_replace("/?$", "/") %>%               # ensure single trailing slash
+        str_replace("^http://", "https://") %>%
+        str_remove("\\?.*$") %>%   # removes utm + SFMC junk
+        str_replace("/?$", "/") %>%
         str_trim()
     )
-  
   
   allStoryStats <- df1 %>% 
     filter(
@@ -2597,6 +3178,15 @@ getCampaignEmails <- function(pageURLs){
 
 #n_distinct(allStoryStats$story_url)
 
+clean_url <- function(x){
+  x %>%
+    as.character() %>%
+    str_to_lower() %>%
+    str_replace("^http://", "https://") %>%
+    str_remove("\\?.*$") %>%
+    str_replace("/+$", "") %>%
+    str_trim()
+}
 
 ##' get individual newsletter clicks - for Salesforce campaign member data frame
 
@@ -5120,7 +5710,251 @@ getCampaignNewsletters <- function(){
 }
 
 
-#### Donations ####
+## Next steps taken ##
+
+getReportsForPeople <- function(person_ids) {
+  
+  message("Getting reports for event attendees")
+  
+  chunks <- split(person_ids, ceiling(seq_along(person_ids)/200))
+  
+  all_reports <- data.frame()
+  
+  for(chunk in chunks){
+    
+    my_soql <- sprintf(
+      "SELECT CampaignId,
+              Name,
+              Status,
+              HasResponded,
+              ContactId,
+              LeadId,
+              CreatedDate
+       FROM CampaignMember
+       WHERE (ContactId IN ('%s') 
+       OR LeadId IN ('%s'))",
+      paste0(chunk, collapse = "','"),
+      paste0(chunk, collapse = "','")
+    )
+    
+    reports <- sf_query(
+      my_soql,
+      "CampaignMember",
+      api_type = "Bulk 1.0"
+    )
+    
+    all_reports <- bind_rows(all_reports, reports)
+  }
+  
+  return(all_reports)
+}
+
+
+getReportCampaigns <- function() {
+  
+  my_soql <- "
+    SELECT Id, Name, Type
+    FROM Campaign
+    WHERE Type = 'Report'
+  "
+  
+  report_campaigns <- sf_query(
+    my_soql,
+    "Campaign",
+    api_type = "Bulk 1.0"
+  )
+  
+  return(report_campaigns)
+}
+
+getAllReportDownloads <- function(report_ids) {
+  
+  message("Getting all report downloads")
+  
+  chunks <- split(report_ids, ceiling(seq_along(report_ids)/200))
+  
+  all_reports <- data.frame()
+  
+  for(chunk in chunks){
+    
+    my_soql <- sprintf(
+      "SELECT CampaignId,
+              Campaign.Name,
+              Status,
+              HasResponded,
+              ContactId,
+              LeadId,
+              CreatedDate
+       FROM CampaignMember
+       WHERE CampaignId IN ('%s')",
+      paste0(chunk, collapse = "','")
+    )
+    
+    reports <- sf_query(
+      my_soql,
+      "CampaignMember",
+      api_type = "Bulk 1.0"
+    )
+    
+    all_reports <- bind_rows(all_reports, reports)
+  }
+  
+  return(all_reports)
+}
+
+
+
+getEventCampaigns <- function() {
+  
+  my_soql <- "
+    SELECT Id, Name, Type
+    FROM Campaign
+    WHERE Type = 'Event'
+  "
+  
+  event_campaigns <- sf_query(
+    my_soql,
+    "Campaign",
+    api_type = "Bulk 1.0"
+  )
+  
+  return(event_campaigns)
+}
+
+
+getAllEventRegistrations <- function(event_ids) {
+  
+  message("Getting all event registrations")
+  
+  chunks <- split(event_ids, ceiling(seq_along(event_ids)/200))
+  
+  all_events <- data.frame()
+  
+  for(chunk in chunks){
+    
+    my_soql <- sprintf(
+      "SELECT CampaignId,
+              Campaign.Name,
+              Status,
+              HasResponded,
+              ContactId,
+              LeadId,
+              CreatedDate
+       FROM CampaignMember
+       WHERE CampaignId IN ('%s')",
+      paste0(chunk, collapse = "','")
+    )
+    
+    events <- sf_query(
+      my_soql,
+      "CampaignMember",
+      api_type = "Bulk 1.0"
+    )
+    
+    all_events <- bind_rows(all_events, events)
+  }
+  
+  return(all_events)
+}
+
+
+getNewsletterCampaigns <- function() {
+  
+  my_soql <- "
+    SELECT Id, Name, Type
+    FROM Campaign
+    WHERE Type = 'Newsletter'
+  "
+  
+  newsletter_campaigns <- sf_query(
+    my_soql,
+    "Campaign",
+    api_type = "Bulk 1.0"
+  )
+  
+  return(newsletter_campaigns)
+}
+
+
+getAllNewsletterSignups <- function(newsletter_ids) {
+  
+  message("Getting all newsletter signups")
+  
+  chunks <- split(newsletter_ids, ceiling(seq_along(newsletter_ids)/200))
+  
+  all_newsletters <- data.frame()
+  
+  for(chunk in chunks){
+    
+    my_soql <- sprintf(
+      "SELECT CampaignId,
+              Campaign.Name,
+              Status,
+              HasResponded,
+              ContactId,
+              LeadId,
+              CreatedDate
+       FROM CampaignMember
+       WHERE CampaignId IN ('%s')",
+      paste0(chunk, collapse = "','")
+    )
+    
+    newsletters  <- sf_query(
+      my_soql,
+      "CampaignMember",
+      api_type = "Bulk 1.0"
+    )
+    
+    all_newsletters <- bind_rows(all_newsletters, newsletters)
+  }
+  
+  return(all_newsletters)
+}
+
+getAllDonations <- function(account_ids){
+  
+  message("Getting donations")
+  
+  # Remove NA or empty account IDs
+  account_ids <- account_ids[!is.na(account_ids) & account_ids != ""]
+  
+  if(length(account_ids) == 0){
+    message("No valid Account IDs provided")
+    return(data.frame())
+  }
+  
+  chunks <- split(account_ids, ceiling(seq_along(account_ids)/200))
+  
+  all_donations <- data.frame()
+  
+  for(chunk in chunks){
+    
+    ids <- paste0("'", chunk, "'", collapse = ",")
+    
+    my_soql <- sprintf("
+      SELECT AccountId,
+             CloseDate,
+             Gift_Amount_Matching_Gift_Amount__c
+      FROM Opportunity
+      WHERE AccountId IN (%s)
+    ", ids)
+    
+    opps <- sf_query(
+      my_soql,
+      "Opportunity",
+      api_type = "Bulk 1.0"
+    )
+    
+    all_donations <- bind_rows(all_donations, opps)
+  }
+  
+  return(all_donations)
+}
+
+
+
+
+#### Donations In-Depth ####
 
 #' get opportunities/donations submitted by all contacts in this campaign
 #' 1. filter for donations that occurred after interacting with this campaign
@@ -5186,6 +6020,9 @@ getOpportunities2 <- function(dfTiny){
   return(allOpportunities)
 }
     
+
+
+
 
 #tinyTest <- getOpportunities2(dfTiny)
 

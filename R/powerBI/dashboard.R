@@ -30,22 +30,6 @@ con <- dbConnect(
       )
 
 
-
-# a <- dbListTables(con)
-# 
-# b <- as.character("allTraffic" , "campaignNewsletters" ,"campaignPosts"  ,  "contentSummary" ,   "donations", 
-#           "geographyTraffic"  ,  "mediaReferrals"  ,    "SFcampaigns"   ,      "socialTraffic"    ,   "targetCampaign")
-# 
-# 
-# readxl::excel_sheets('OCI+ Dashboard Dataset.xlsx')
-# 
-# for(i in readxl::excel_sheets('OCI+ Dashboard Dataset.xlsx')){
-#   df <- read.xlsx('OCI+ Dashboard Dataset.xlsx', sheet = i, detectDates = TRUE)
-#   dbWriteTable(con, i, df, append = TRUE)
-# 
-# }
-
-
 ### SET CAMPAIGN
 
 #' Monday.com Token
@@ -80,31 +64,24 @@ ss <- 'COP28_testing Dashboard Dataset.xlsx'
 ### START OF NEW VERSION
 rmiPropertyID <- 354053620
 propertyIDs <- rmiPropertyID
+propertyID <- rmiPropertyID
+
 
 dateRangeGA <- c("2023-01-01", paste(currentDate))
 campaign_tags <- c("cop28", "2023-2025_coalvgas", "oci+", "nycw24", 
                    "transition-narrative", "cop29", "fapp24", "cera25", "sapp25", "nycw25",
-                   "cop30", "fapp25")
-
-
-
+                   "cop30", "fapp25", "cera26")
 
 # Call the main function to get filtered URLs with campaign tags; now using optimized new function
-#filtered_urls <- data.frame(pagePath = character(),
- #                           campaign_tag = character(),
-  #                          stringsAsFactors = FALSE)
-#filtered_urls <- getWebsiteURLs2(propertyID = rmiPropertyID, campaign_tags = campaign_tags)
-
-
-# filtered_urls <- data.frame(pagePath = character(),
-#                             campaign_tag = character(),
-#                             stringsAsFactors = FALSE)
-# filtered_urls <- getWebsiteURLs2(propertyID = rmiPropertyID, campaign_tags = campaign_tags)
+ #filtered_urls <- data.frame(pagePath = character(),
+   #                          campaign_tag = character(),
+  #                           stringsAsFactors = FALSE)
+ #filtered_urls <- getWebsiteURLs2(propertyID = rmiPropertyID, campaign_tags = campaign_tags)
 
 
 start <- Sys.time()
 
-filtered_urls <- getWebsiteURLsV3(rmiPropertyID,campaign_tags,
+filtered_urls <- getWebsiteURLsV4(rmiPropertyID,campaign_tags,
                            date_range = dateRangeGA,
                            view_threshold = 50, progress_every = 50,
                            debug = FALSE)
@@ -131,26 +108,7 @@ allCampaignPages <- data.frame(pageTitle = character(),
                                dashboardCampaign = character(),
                                stringsAsFactors = FALSE)
 
-
-for (campaignID in campaigns){
-  print(paste("processing campaign:", campaignID))
-  
-  campaignPages <- campaign_urls %>%
-    filter(campaign_tag == campaignID) %>%
-    mutate(dashboardCampaign = campaignID)
-  
-
-  print(campaignPages)
-  
-  if(nrow(campaignPages)>0){
-    allCampaignPages <- bind_rows(allCampaignPages, campaignPages)
-  }
-}
-  
-  
-print(allCampaignPages)
-
-campaignPages <- allCampaignPages
+campaignPages <- campaign_urls
 
 
 
@@ -225,8 +183,13 @@ maxImpact <- pageDataTags %>%
   filter(cleanTitle == "Maximize Your Impact: Use Your Employer’s Matching Gift Program") %>%
   mutate(campaign_tag = "sapp25")
 
+cera26 <- pageDataTags %>%
+  filter(cleanTitle == "RMI at CERAWeek") %>%
+  mutate(campaign_tag = "cera26") %>% 
+  mutate(pageURL = "https://rmi.org/rmi-at-ceraweek/")
+
 # Bind the new row back to your dataframe
-pageDataTags <- bind_rows(pageDataTags, makeAGift, corpEngagement, maxImpact)
+pageDataTags <- bind_rows(pageDataTags, makeAGift, corpEngagement, maxImpact, cera26)
 
 pageDataTags <- pageDataTags %>%
   bind_rows(
@@ -477,11 +440,11 @@ eventID_data <- eventID_data %>%
   filter(eventID != "701Qk00000cEprHIAS") %>%
   filter(eventID != "701Qk00000bjlbuIAA") %>%
   filter(eventID != "701Qk00000aVLxxIAG") %>%
-  filter(eventID != "701Qk00000bfabhIAA")
-  
-  
-  
+  filter(eventID != "701Qk00000bfabhIAA") %>%
+  #ceraweek26, remove
+  filter(eventID != "701Qk00000gRsM9IAK")
 
+  
 eventID_data2 <- eventID_data %>%
   filter(eventID %in% c("701Qk00000ET96dIAD", "701Qk00000Ka1dJIAR"))
 
@@ -556,6 +519,7 @@ pageURLs <- pageDataClean$pageURL
 #rmi.org alone was being included
 pageURLs <- pageDataClean$pageURL[pageDataClean$pageURL != "https://rmi.org/"]
 
+print(pageURLs)
 
 #maybe need to add in "https://rmi.org/employer-match/"      
 
@@ -575,7 +539,32 @@ pageURLs <- pageDataClean$pageURL[pageDataClean$pageURL != "https://rmi.org/"]
 #  select(-pageTitle)
 
 
-campaignNewslettersRevision <- getCampaignEmails(pageURLs)%>%
+campaignNewslettersRevision <- getCampaignEmails(pageURLs) %>%
+  mutate(
+    date = case_when(
+      name == "Fall Appeal Solicitation #7b 20251231 - last chance non donors" ~ as.Date("2025-12-31"),
+      name == "Fall Appeal Solicitation #2 2025-1-18 soft ask" ~ as.Date("2025-01-18"),
+      name == "Fall Appeal Cultivation #1 2025-1-18" ~ as.Date("2025-01-18"),
+      name == "Fall Appeal Solicitation #6b 2025-12023 non donors" ~ as.Date("2025-12-23"),
+      name == "Fall Appeal #7a Last chance - donor" ~ as.Date("2025-12-31"),
+      name == "NA:-8 Upcoming Events" ~ as.Date("2026-03-08"),
+      name == "NA: Upcoming Events" ~ as.Date("2026-01-11"),
+      name == "NA:CORRECTION Fall Appeal Solicitation #1n" ~ as.Date("2025-11-19"),
+      TRUE ~ date
+    )
+  )
+
+campaignNewslettersRevision <- campaignNewslettersRevision %>%
+  mutate(
+    name = case_when(
+      name == "NA:-8 Upcoming Events" ~ ("2026-03-08: Upcoming Events"),
+      name == "NA: Upcoming Events" ~ ("2026-01-11: Upcoming Events"),
+      name == "NA:CORRECTION Fall Appeal Solicitation #1n" ~ ("2025-11-19: CORRECTION Fall Appeal Solicitation #1n"),
+      TRUE ~ name
+    )
+  )
+
+campaignNewslettersRevision <- campaignNewslettersRevision %>%
   mutate(story_url = as.character(story_url),
          
   # recode titles only for Fall Appeal
@@ -621,11 +610,11 @@ campaignNewsletters <- campaignNewslettersRevision %>%
   select(-pageTitle)  # remove helper column if needed
 
 
-campaignNewsletters <- campaignNewsletters  %>%
-  left_join(campaignPages %>%
-              select(pageTitle, pagePath, campaign_tag) %>%
-              distinct(pagePath, .keep_all = TRUE), 
-            by = c("story_title" = "pageTitle")) %>%  
+campaignNewsletters2 <- campaignNewsletters  %>%
+  left_join(pageDataTags %>%
+              select(pageTitle, pageURL, campaign_tag) %>%
+              distinct(pageURL, .keep_all = TRUE), 
+            by = c("story_url" = "pageURL")) %>%  
   rename(campaignID = campaign_tag) %>%
   mutate(
     campaignID = case_when(
@@ -639,7 +628,7 @@ campaignNewsletters <- campaignNewsletters  %>%
 # for emails with a/b testing
 
 
-campaignNewsletters <- campaignNewsletters %>%
+campaignNewsletters3 <- campaignNewsletters2 %>%
   group_by(name, story_url) %>%
   summarize(
     delivered_ = sum(delivered_, na.rm = TRUE),
@@ -659,16 +648,20 @@ campaignNewsletters <- campaignNewsletters %>%
          unique_CTR, UCTRvsAvg, story_url, story_title, story_clicks, story_COR, campaignID)
 
 # NYCW and COP campaigns end 5 weeks after conferences; pages were being referenced in newsletters months after campaign finished
-campaignNewsletters <- campaignNewsletters %>%
-  filter(!(campaignID == "nycw24" & !between(date, as.Date("2024-09-01"), as.Date("2024-10-05")) & !is.na(date))) %>%
-  filter(!(campaignID == "cop29"  & !between(date, as.Date("2024-11-11"), as.Date("2024-12-16")) & !is.na(date))) %>%
-  filter(!(campaignID == "cop28"  & !between(date, as.Date("2023-11-30"), as.Date("2023-12-30")) & !is.na(date))) %>%
+# Building in 3 weeks before campaigns actually start, except for appeals
+
+campaignNewsletters <- campaignNewsletters3 %>%
+  filter(!(campaignID == "nycw24" & !between(date, as.Date("2024-08-11"), as.Date("2024-10-05")) & !is.na(date))) %>%
+  filter(!(campaignID == "cop29"  & !between(date, as.Date("2024-10-21"), as.Date("2024-12-16")) & !is.na(date))) %>%
+  filter(!(campaignID == "cop28"  & !between(date, as.Date("2023-10-09"), as.Date("2023-12-30")) & !is.na(date))) %>%
   filter(!(campaignID == "fapp24" & !between(date, as.Date("2024-11-01"), as.Date("2025-02-10")) & !is.na(date))) %>%
-  filter(!(campaignID == "cera25" & !between(date, as.Date("2025-03-07"), as.Date("2025-04-11")) & !is.na(date))) %>%
+  filter(!(campaignID == "cera25" & !between(date, as.Date("2025-02-14"), as.Date("2025-04-11")) & !is.na(date))) %>%
   filter(!(campaignID == "sapp25" & !between(date, as.Date("2025-03-30"), as.Date("2025-06-30")) & !is.na(date))) %>%
   filter(!(campaignID == "nycw25" & !between(date, as.Date("2025-08-31"), as.Date("2025-10-04")) & !is.na(date))) %>%
   filter(!(campaignID == "fapp25" & !between(date, as.Date("2025-11-03"), as.Date("2025-12-31")) & !is.na(date))) %>%
-  filter(!(campaignID == "cop30" & !between(date, as.Date("2025-11-10"), as.Date("2025-12-15")) & !is.na(date))) 
+  filter(!(campaignID == "cop30" & !between(date, as.Date("2025-10-20"), as.Date("2025-12-15")) & !is.na(date))) %>%
+  filter(!(campaignID == "cera26" & !between(date, as.Date("2026-03-02"), as.Date("2026-05-01")) & !is.na(date))) 
+
 
 # for now, for SF integration
 
@@ -937,17 +930,183 @@ SFcampaigns <- SFcampaigns %>%
       
       (campaignID == "sapp25" & EngagementDate >= as.Date("2025-03-30") & EngagementDate <= as.Date("2025-06-30")) |
       (campaignID == "fapp24" & EngagementDate >= as.Date("2024-11-01") & EngagementDate <= as.Date("2025-02-10")) |
-      (campaignID == "nycw24" & EngagementDate >= as.Date("2024-09-01") & EngagementDate <= as.Date("2024-10-05")) |
+      (campaignID == "nycw24" & EngagementDate >= as.Date("2024-08-11") & EngagementDate <= as.Date("2024-10-05")) |
       (campaignID == "nycw25" & EngagementDate >= as.Date("2025-08-31") & EngagementDate <= as.Date("2025-10-04")) |
-      (campaignID == "cera25" & EngagementDate >= as.Date("2025-03-07") & EngagementDate <= as.Date("2025-04-11")) |
-      (campaignID == "cop29" & EngagementDate >= as.Date("2024-11-11") & EngagementDate <= as.Date("2024-12-16")) |
-      (campaignID == "cop28" & EngagementDate >= as.Date("2023-11-30") & EngagementDate <= as.Date("2023-12-30")) |
-      (campaignID == "cop30" & EngagementDate >= as.Date("2025-11-10") & EngagementDate <= as.Date("2025-12-15")) 
+      (campaignID == "cera25" & EngagementDate >= as.Date("2025-02-14") & EngagementDate <= as.Date("2025-04-11")) |
+      (campaignID == "cera26" & EngagementDate >= as.Date("2026-03-02") & EngagementDate <= as.Date("2026-05-01")) |
+      (campaignID == "cop29" & EngagementDate >= as.Date("2024-10-21") & EngagementDate <= as.Date("2024-12-16")) |
+      (campaignID == "cop28" & EngagementDate >= as.Date("2023-10-09") & EngagementDate <= as.Date("2023-12-30")) |
+      (campaignID == "cop30" & EngagementDate >= as.Date("2025-10-20") & EngagementDate <= as.Date("2025-12-15")) 
   )
 
 
 
+## NEXT STEPS AFTER REGISTERING FOR AN EVENT ##
 
+event_people <- campaignMembersEvents %>%
+  filter(Engagements == 1) %>%
+  select(EventName = CampaignName, EventEngagementDate = EngagementDate, Id, AccountId, Email, campaignID) %>%
+  distinct()
+
+# Reports 
+
+report_campaigns <- getReportCampaigns()
+
+report_downloads <- getAllReportDownloads(report_campaigns$Id)
+
+report_downloads <- report_downloads %>%
+  mutate(
+    Id = ifelse(is.na(ContactId), LeadId, ContactId),
+    ReportDownloaded = as.Date(CreatedDate)
+  ) %>%
+  filter(Status == "Downloaded")
+
+event_to_reports <- event_people %>%
+  left_join(report_downloads, by = "Id") %>%
+  filter(
+    ReportDownloaded >= EventEngagementDate,
+    ReportDownloaded <= EventEngagementDate + 90
+  ) %>%
+  mutate(Type = "Report Downloaded") %>%
+  select(EventName, EventEngagementDate, campaignID, Id, Email, NextEngagement = Campaign.Name, 
+         NextEngagementDate = ReportDownloaded, Type)
+
+# Events
+
+event_campaigns <- getEventCampaigns()
+
+event_registrations <- getAllEventRegistrations(event_campaigns$Id)
+
+
+event_registrations <- event_registrations %>%
+  mutate(
+    Id = ifelse(is.na(ContactId), LeadId, ContactId),
+    NextEventRegistered = as.Date(CreatedDate)
+  ) %>%
+  filter(Status %in% c(
+    "Attending",
+    "WAITLIST",
+    "Registered",
+    "Attended",
+    "Attending - High Priority",
+    "Waitlisted",
+    "De-registered",
+    "WAITLIST - High Priority",
+    "Registered - In Person, Speaker",
+    "+1 Speaker Guest"
+  ))
+
+event_to_events <- event_people %>%
+  left_join(event_registrations, by = "Id") %>%
+  filter(
+    NextEventRegistered >= EventEngagementDate,
+    NextEventRegistered <= EventEngagementDate + 90
+  ) %>%
+  mutate(Type = "Event Registered") %>%
+  select(EventName, EventEngagementDate, campaignID, Id, Email, NextEngagement = Campaign.Name, 
+         NextEngagementDate = NextEventRegistered, Type) %>%
+
+
+# Newsletter signups 
+
+newsletter_campaigns <- getNewsletterCampaigns()
+
+newsletter_signups <- getAllNewsletterSignups(newsletter_campaigns$Id)
+
+newsletter_signups <- newsletter_signups %>%
+  mutate(
+    Id = ifelse(is.na(ContactId), LeadId, ContactId),
+    Subscribed = as.Date(CreatedDate)
+  ) %>%
+  filter(Status == "Subscribed")
+
+event_to_newsletters <- event_people %>%
+  left_join(newsletter_signups, by = "Id") %>%
+  filter(
+    Subscribed >= EventEngagementDate,
+    Subscribed <= EventEngagementDate + 90
+  ) %>%
+  mutate(Type = "Newsletter Signup") %>%
+  select(EventName, EventEngagementDate, campaignID, Id, Email, NextEngagement = Campaign.Name, 
+         NextEngagementDate = Subscribed, Type)
+
+# Donations
+
+donation_campaigns <- getAllDonations(event_people$AccountId)
+
+#newsletter_signups <- getAllNewsletterSignups(newsletter_campaigns$Id)
+
+donationsGiven <- donation_campaigns %>%
+  mutate(
+    DonationDate = as.Date(CloseDate),
+    DonationAmount = Gift_Amount_Matching_Gift_Amount__c
+  ) %>%
+  mutate(Campaign.Name = "Donation") 
+
+
+event_to_donations <- event_people %>%
+  left_join(donationsGiven, by = "AccountId") %>%
+  filter(
+    DonationDate >= EventEngagementDate,
+    DonationDate <= EventEngagementDate + 90
+  ) 
+
+event_to_donations <- event_to_donations %>%
+  mutate(
+    DonationValue = as.numeric(Gift_Amount_Matching_Gift_Amount__c),
+    TimeDifference = as.numeric(difftime(CloseDate, EventEngagementDate, units = "days")),
+ #   TimeDifferenceAdjusted = ifelse(TimeDifference < 31, 1, TimeDifference),
+    TimeDifferenceAdjusted = pmax(pmin(TimeDifference, 90), 1),
+    AttributedDonationValue = DonationValue / (1/(1.0041 - 0.0041*TimeDifferenceAdjusted))
+  ) %>%
+  # if multiple donations per account, adjust for multiple campaigns/engagements
+  group_by(Id, AccountId) %>%
+  mutate(
+    CountDonations = n(),
+   # AttributedDonationValue = round(AttributedDonationValue / CountDonations, 1)
+   AttributedDonationValue = DonationValue / (1 / (1.002 - 0.002 * TimeDifferenceAdjusted))
+  ) %>%
+  ungroup() %>%
+  select(-DonationValue, -TimeDifference, -TimeDifferenceAdjusted, -CountDonations)
+
+event_to_donations <- event_to_donations %>%
+  distinct(EventName, Id, DonationDate, DonationAmount, .keep_all = TRUE) %>%
+  mutate(Type = "Donation") %>%
+  select(EventName, EventEngagementDate, campaignID, Id, Email, NextEngagement = Campaign.Name, 
+         NextEngagementDate = DonationDate, DonationAmount, AttributedDonationValue, Type)
+
+futureEngagementsTotal <- bind_rows(event_to_reports, event_to_events, event_to_newsletters, event_to_donations)
+
+futureEngagementsTotal <- futureEngagementsTotal %>%
+  mutate(EventName = trimws(
+      # keep only the part after the last date or code repetition
+      sub(".*\\d{4}(-\\d{2}){1,2}\\s*", "", EventName)
+    )) %>%
+  mutate(NextEngagement = trimws(
+    # keep only the part after the last date or code repetition
+    sub(".*\\d{4}(-\\d{2}){1,2}\\s*", "", NextEngagement)))
+  
+futureEngagementsClassify <- futureEngagementsTotal %>%
+  mutate(
+    DaysToNextEngagement = as.numeric(
+      difftime(NextEngagementDate, EventEngagementDate, units = "days")
+    ),
+    EngagementWindow = case_when(
+      DaysToNextEngagement <= 30 ~ "Within 1 Month",
+      DaysToNextEngagement <= 90 ~ "Within 3 Months",
+      TRUE ~ "Outside Window"
+    )
+  )
+
+futureEngagements_3mo <- futureEngagementsClassify %>%
+  filter(EngagementWindow == "Within 1 Month") %>%
+  mutate(EngagementWindow = "Within 3 Months")
+
+# Combine back together
+futureEngagements <- bind_rows(
+  futureEngagementsClassify,
+  futureEngagements_3mo
+)
 
 #### SOCIAL MEDIA #### SKIP -- WILL NO LONGER RUN POST-SPROUT TERMINATION
 message('GETTING SOCIAL MEDIA DATA')
@@ -1306,7 +1465,7 @@ socialTag <- c(socialTag, "fapp25")
 socialTag <- c(socialTag, "Fall Appeal 25") 
 socialTag <- c(socialTag, "Cop30") 
 socialTag <- c(socialTag, "Cop 30") 
-
+socialTag <- c(socialTag, "Cera26") 
 
 
 
@@ -1727,7 +1886,7 @@ con <- dbConnect(
 
 #v2 - might need to move below to where campaign id is assigned?
 campaign_ids <- c("cop28", "2023-2025_coalvgas", "oci+", "nycw24", "OCI", "2023_CoalvGas", "transition-narrative",
-                  "cop29", "fapp24", "cera25", "sapp25", "nycw25", "fapp25", "cop30")
+                  "cop29", "fapp24", "cera25", "sapp25", "nycw25", "fapp25", "cop30", "cera26")
 campaign_ids <- paste0("'", campaign_ids, "'", collapse = ", ")
 
 
@@ -1766,7 +1925,7 @@ for (i in tables) {
   })
 }
 
-dbSendQuery(con, "DELETE FROM campaignPosts;")
+dbSendQuery(con, "DELETE FROM futureEngagements;")
 
 
 #for sf campaigns
@@ -1822,11 +1981,10 @@ mediaReferrals <- mediaReferrals %>%
   left_join(campaignPages %>%
               select(pageTitle, campaign_tag) %>%
               distinct(pageTitle, .keep_all = TRUE), 
-            by = "pageTitle") %>%
+            by = "pageTitle")
 
 mediaReferrals <- mediaReferrals %>%
-  rename(campaignID = campaign_tag)
-
+  rename(campaignID = campaign_tag.x) 
   
 #new, changing names
 campaignNewsletters <- campaignNewsletters %>%
@@ -1976,7 +2134,7 @@ con <- dbConnect(
 dfs <- list("allTraffic" = allTraffic, "socialTraffic" = socialTraffic, "geographyTraffic" = geographyTraffic, 
             "mediaReferrals" = mediaReferrals, "campaignNewsletters" =  campaignNewsletters, 
             "SFcampaigns"= SFcampaigns,"donations"= donations, "campaignPosts" = campaignPosts, 
-            "targetCampaign"= targetCampaign, "contentSummary"= contentSummary)
+            "targetCampaign"= targetCampaign, "contentSummary"= contentSummary, "futureEngagements" = futureEngagements)
 # change to not append
 if (nrow(targetCampaign) > 0){
   dbWriteTable(con, name = 'targetCampaign', value = targetCampaign, append = TRUE)
@@ -2000,6 +2158,7 @@ dbWriteTable(con, name = 'contentSummary', value = contentSummary, append = T)
 #dbWriteTable(con, name = 'contentSummary', value = contentSummary, overwrite = TRUE)
 dbWriteTable(con, name = 'donations', value = donations, append = T)
 #dbWriteTable(con, name = 'donations', value = donations, overwrite = TRUE)
+dbWriteTable(con, name = "futureEngagements", value = futureEngagements, append = T)
 
 
 
